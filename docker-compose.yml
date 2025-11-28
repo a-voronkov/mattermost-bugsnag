@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: mmuser
+      POSTGRES_PASSWORD: mmuser_password
+      POSTGRES_DB: mattermost
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mmuser -d mattermost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mattermost:
+    image: mattermost/mattermost-enterprise-edition:release-9.11
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8065:8065"
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mmuser:mmuser_password@postgres:5432/mattermost?sslmode=disable
+      MM_SERVICESETTINGS_SITEURL: http://localhost:8065
+      MM_PLUGINSETTINGS_ENABLEUPLOADS: "true"
+      MM_PLUGINSETTINGS_ENABLE: "true"
+      MM_LOGSETTINGS_CONSOLELEVEL: DEBUG
+      MM_LOGSETTINGS_FILELEVEL: DEBUG
+    volumes:
+      - mattermost_data:/mattermost/data
+      - mattermost_logs:/mattermost/logs
+      - mattermost_config:/mattermost/config
+      - mattermost_plugins:/mattermost/plugins
+      - mattermost_client_plugins:/mattermost/client/plugins
+      # Mount dist folder for easy plugin upload
+      - ./dist:/mattermost/plugin-dist:ro
+
+volumes:
+  postgres_data:
+  mattermost_data:
+  mattermost_logs:
+  mattermost_config:
+  mattermost_plugins:
+  mattermost_client_plugins:
+

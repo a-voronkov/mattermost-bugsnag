@@ -9,25 +9,196 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
-// webhookPayload is a light struct to keep the handler focused on routing.
-// Full payload samples live in docs/sample-payloads.md.
+// webhookPayload represents the full Bugsnag webhook payload.
+// See https://docs.bugsnag.com/product/integrations/webhook/
 type webhookPayload struct {
-	Event       string        `json:"event"`
-	ErrorID     string        `json:"error_id"`
-	ProjectID   string        `json:"project_id"`
-	Summary     string        `json:"summary"`
-	Environment string        `json:"environment"`
-	Severity    string        `json:"severity"`
-	ErrorURL    string        `json:"error_url"`
-	LastSeen    string        `json:"last_seen"`
-	Counts      payloadCounts `json:"counts"`
-	// Additional fields from Bugsnag can be added as needed.
+	Trigger triggerInfo  `json:"trigger"`
+	Error   *errorInfo   `json:"error,omitempty"`
+	Project *projectInfo `json:"project,omitempty"`
+	Account *accountInfo `json:"account,omitempty"`
+	Release *releaseInfo `json:"release,omitempty"`
 }
 
-type payloadCounts struct {
-	Users     int `json:"users"`
-	Events1h  int `json:"events_1h"`
-	Events24h int `json:"events_24h"`
+type triggerInfo struct {
+	Type        string `json:"type"`
+	Message     string `json:"message"`
+	Rate        int    `json:"rate,omitempty"`
+	StateChange string `json:"stateChange,omitempty"`
+}
+
+type projectInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type accountInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type errorInfo struct {
+	ID             string          `json:"id"`
+	ErrorID        string          `json:"errorId"`
+	ExceptionClass string          `json:"exceptionClass"`
+	Message        string          `json:"message"`
+	Context        string          `json:"context"`
+	FirstReceived  string          `json:"firstReceived"`
+	ReceivedAt     string          `json:"receivedAt"`
+	RequestURL     string          `json:"requestUrl,omitempty"`
+	URL            string          `json:"url"`
+	Severity       string          `json:"severity"`
+	Status         string          `json:"status"`
+	Unhandled      bool            `json:"unhandled"`
+	App            *appInfo        `json:"app,omitempty"`
+	Device         *deviceInfo     `json:"device,omitempty"`
+	User           *userInfo       `json:"user,omitempty"`
+	Exceptions     []exceptionInfo `json:"exceptions,omitempty"`
+	StackTrace     []stackFrame    `json:"stackTrace,omitempty"` // deprecated but still sent
+}
+
+type appInfo struct {
+	ID           string `json:"id,omitempty"`
+	Version      string `json:"version,omitempty"`
+	ReleaseStage string `json:"releaseStage,omitempty"`
+	Type         string `json:"type,omitempty"`
+}
+
+type deviceInfo struct {
+	Hostname       string `json:"hostname,omitempty"`
+	OSName         string `json:"osName,omitempty"`
+	OSVersion      string `json:"osVersion,omitempty"`
+	BrowserName    string `json:"browserName,omitempty"`
+	BrowserVersion string `json:"browserVersion,omitempty"`
+}
+
+type userInfo struct {
+	ID    string `json:"id,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
+type exceptionInfo struct {
+	ErrorClass string       `json:"errorClass"`
+	Message    string       `json:"message"`
+	Type       string       `json:"type,omitempty"`
+	Stacktrace []stackFrame `json:"stacktrace,omitempty"`
+}
+
+type stackFrame struct {
+	InProject    bool              `json:"inProject"`
+	LineNumber   interface{}       `json:"lineNumber,omitempty"` // can be int or string
+	ColumnNumber interface{}       `json:"columnNumber,omitempty"`
+	File         string            `json:"file,omitempty"`
+	Method       string            `json:"method,omitempty"`
+	Code         map[string]string `json:"code,omitempty"`
+}
+
+type releaseInfo struct {
+	ID           string `json:"id"`
+	Version      string `json:"version"`
+	ReleaseStage string `json:"releaseStage"`
+	URL          string `json:"url"`
+}
+
+// Helper methods to extract common fields from the nested payload structure
+func (p webhookPayload) getProjectID() string {
+	if p.Project != nil {
+		return p.Project.ID
+	}
+	return ""
+}
+
+func (p webhookPayload) getProjectName() string {
+	if p.Project != nil {
+		return p.Project.Name
+	}
+	return ""
+}
+
+func (p webhookPayload) getErrorID() string {
+	if p.Error != nil {
+		return p.Error.ErrorID
+	}
+	return ""
+}
+
+func (p webhookPayload) getErrorURL() string {
+	if p.Error != nil {
+		return p.Error.URL
+	}
+	return ""
+}
+
+func (p webhookPayload) getSeverity() string {
+	if p.Error != nil {
+		return p.Error.Severity
+	}
+	return ""
+}
+
+func (p webhookPayload) getEnvironment() string {
+	if p.Error != nil && p.Error.App != nil {
+		return p.Error.App.ReleaseStage
+	}
+	return ""
+}
+
+func (p webhookPayload) getExceptionClass() string {
+	if p.Error != nil {
+		return p.Error.ExceptionClass
+	}
+	return ""
+}
+
+func (p webhookPayload) getMessage() string {
+	if p.Error != nil {
+		return p.Error.Message
+	}
+	return ""
+}
+
+func (p webhookPayload) getContext() string {
+	if p.Error != nil {
+		return p.Error.Context
+	}
+	return ""
+}
+
+func (p webhookPayload) getStatus() string {
+	if p.Error != nil {
+		return p.Error.Status
+	}
+	return ""
+}
+
+func (p webhookPayload) isUnhandled() bool {
+	if p.Error != nil {
+		return p.Error.Unhandled
+	}
+	return false
+}
+
+func (p webhookPayload) getAppVersion() string {
+	if p.Error != nil && p.Error.App != nil {
+		return p.Error.App.Version
+	}
+	return ""
+}
+
+func (p webhookPayload) getStacktrace() []stackFrame {
+	if p.Error != nil {
+		// Try exceptions first (newer format)
+		if len(p.Error.Exceptions) > 0 && len(p.Error.Exceptions[0].Stacktrace) > 0 {
+			return p.Error.Exceptions[0].Stacktrace
+		}
+		// Fall back to deprecated stackTrace field
+		if len(p.Error.StackTrace) > 0 {
+			return p.Error.StackTrace
+		}
+	}
+	return nil
 }
 
 func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +216,7 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	p.API.LogInfo("received webhook", "remote", r.RemoteAddr)
 
-	mm := newMMClient(p.API, cfg.EnableDebugLog, p.kvNS())
+	mm := newMMClient(p.API, cfg.EnableDebugLog, p.kvNS(), p.botUserID)
 
 	var payload webhookPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -53,14 +224,17 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mappings, err := loadProjectChannelMappings(mm)
+	allRules, err := loadChannelRules(mm)
 	if err != nil {
-		p.API.LogError("failed to load project/channel mappings", "err", err.Error())
+		p.API.LogError("failed to load channel rules", "err", err.Error())
 		http.Error(w, "cannot load channel mappings", http.StatusInternalServerError)
 		return
 	}
 
-	channelRules := mappings[payload.ProjectID]
+	projectID := payload.getProjectID()
+	errorID := payload.getErrorID()
+
+	channelRules := getRulesForProject(allRules, projectID)
 	processed := 0
 
 	for _, rule := range channelRules {
@@ -69,7 +243,7 @@ func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := p.upsertErrorCard(mm, rule.ChannelID, payload, cfg); err != nil {
-			p.API.LogError("failed to upsert webhook card", "channel", rule.ChannelID, "error_id", payload.ErrorID, "project_id", payload.ProjectID, "err", err.Error())
+			p.API.LogError("failed to upsert webhook card", "channel", rule.ChannelID, "error_id", errorID, "project_id", projectID, "err", err.Error())
 			continue
 		}
 
@@ -130,38 +304,100 @@ func validateWebhookToken(cfg Configuration, r *http.Request) error {
 }
 
 func buildCardTitle(payload webhookPayload) string {
-	switch {
-	case strings.TrimSpace(payload.Summary) != "":
-		return ":rotating_light: **[BUG]** " + payload.Summary
-	case strings.TrimSpace(payload.ErrorID) != "":
-		return ":rotating_light: **[BUG]** " + payload.ErrorID
-	default:
-		return ":rotating_light: Bugsnag error"
+	exceptionClass := payload.getExceptionClass()
+	message := payload.getMessage()
+
+	if exceptionClass != "" && message != "" {
+		return fmt.Sprintf(":rotating_light: **%s**: %s", exceptionClass, message)
 	}
+	if exceptionClass != "" {
+		return ":rotating_light: **" + exceptionClass + "**"
+	}
+	if message != "" {
+		return ":rotating_light: " + message
+	}
+	if payload.Trigger.Message != "" {
+		return ":rotating_light: " + payload.Trigger.Message
+	}
+	return ":rotating_light: Bugsnag error"
 }
 
 func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.SlackAttachment {
-	fields := []string{}
+	errorID := payload.getErrorID()
+	projectID := payload.getProjectID()
+	projectName := payload.getProjectName()
+	errorURL := payload.getErrorURL()
+	severity := payload.getSeverity()
+	environment := payload.getEnvironment()
+	context := payload.getContext()
+	status := payload.getStatus()
+	appVersion := payload.getAppVersion()
 
-	if payload.Environment != "" {
-		fields = append(fields, fmt.Sprintf("Env: %s", payload.Environment))
-	}
-	if payload.Severity != "" {
-		fields = append(fields, fmt.Sprintf("Severity: %s", payload.Severity))
-	}
-	if payload.Counts.Users > 0 {
-		fields = append(fields, fmt.Sprintf("Users: %d", payload.Counts.Users))
-	}
-	if payload.Counts.Events1h > 0 || payload.Counts.Events24h > 0 {
-		fields = append(fields, fmt.Sprintf("Events (1h/24h): %d / %d", payload.Counts.Events1h, payload.Counts.Events24h))
-	}
-	if payload.LastSeen != "" {
-		fields = append(fields, fmt.Sprintf("Last seen: %s", payload.LastSeen))
+	// Build fields with short=true for compact display
+	var attachmentFields []*model.SlackAttachmentField
+
+	if severity != "" {
+		attachmentFields = append(attachmentFields, &model.SlackAttachmentField{
+			Title: "Severity",
+			Value: severityEmoji(severity) + " " + severity,
+			Short: true,
+		})
 	}
 
-	text := strings.Join(fields, " | ")
-	if payload.ProjectID != "" {
-		text += fmt.Sprintf("\nProject: %s", payload.ProjectID)
+	if environment != "" {
+		attachmentFields = append(attachmentFields, &model.SlackAttachmentField{
+			Title: "Environment",
+			Value: environment,
+			Short: true,
+		})
+	}
+
+	if status != "" {
+		attachmentFields = append(attachmentFields, &model.SlackAttachmentField{
+			Title: "Status",
+			Value: status,
+			Short: true,
+		})
+	}
+
+	if payload.isUnhandled() {
+		attachmentFields = append(attachmentFields, &model.SlackAttachmentField{
+			Title: "Handled",
+			Value: "❌ Unhandled",
+			Short: true,
+		})
+	}
+
+	if context != "" {
+		attachmentFields = append(attachmentFields, &model.SlackAttachmentField{
+			Title: "Context",
+			Value: context,
+			Short: true,
+		})
+	}
+
+	if appVersion != "" {
+		attachmentFields = append(attachmentFields, &model.SlackAttachmentField{
+			Title: "App Version",
+			Value: appVersion,
+			Short: true,
+		})
+	}
+
+	if projectName != "" {
+		attachmentFields = append(attachmentFields, &model.SlackAttachmentField{
+			Title: "Project",
+			Value: projectName,
+			Short: true,
+		})
+	}
+
+	if payload.Trigger.Type != "" {
+		attachmentFields = append(attachmentFields, &model.SlackAttachmentField{
+			Title: "Trigger",
+			Value: payload.Trigger.Type,
+			Short: true,
+		})
 	}
 
 	footer := "Bugsnag"
@@ -180,9 +416,9 @@ func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.Slack
 				URL: actionURL,
 				Context: map[string]any{
 					"action":     "assign_me",
-					"error_id":   payload.ErrorID,
-					"project_id": payload.ProjectID,
-					"error_url":  payload.ErrorURL,
+					"error_id":   errorID,
+					"project_id": projectID,
+					"error_url":  errorURL,
 				},
 			},
 		},
@@ -195,8 +431,8 @@ func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.Slack
 				URL: actionURL,
 				Context: map[string]any{
 					"action":     "resolve",
-					"error_id":   payload.ErrorID,
-					"project_id": payload.ProjectID,
+					"error_id":   errorID,
+					"project_id": projectID,
 				},
 			},
 		},
@@ -209,14 +445,14 @@ func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.Slack
 				URL: actionURL,
 				Context: map[string]any{
 					"action":     "ignore",
-					"error_id":   payload.ErrorID,
-					"project_id": payload.ProjectID,
+					"error_id":   errorID,
+					"project_id": projectID,
 				},
 			},
 		},
 	}
 
-	if payload.ErrorURL != "" {
+	if errorURL != "" {
 		actions = append(actions, &model.PostAction{
 			Id:    "open",
 			Name:  "🔗 Open in Bugsnag",
@@ -226,19 +462,92 @@ func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.Slack
 				URL: actionURL,
 				Context: map[string]any{
 					"action":    "open_in_browser",
-					"error_url": payload.ErrorURL,
+					"error_url": errorURL,
 				},
 			},
 		})
 	}
 
+	// Set color based on severity
+	color := "#4949E4" // Bugsnag purple default
+	switch severity {
+	case "error":
+		color = "#D9534F" // red
+	case "warning":
+		color = "#F0AD4E" // yellow/orange
+	case "info":
+		color = "#5BC0DE" // blue
+	}
+
 	return &model.SlackAttachment{
-		Title:     payload.Summary,
-		TitleLink: payload.ErrorURL,
-		Text:      text,
+		Color:     color,
+		Title:     payload.getExceptionClass(),
+		TitleLink: errorURL,
+		Text:      payload.getMessage(),
+		Fields:    attachmentFields,
 		Footer:    footer,
 		Actions:   actions,
 	}
+}
+
+func severityEmoji(severity string) string {
+	switch severity {
+	case "error":
+		return "🔴"
+	case "warning":
+		return "🟡"
+	case "info":
+		return "🔵"
+	default:
+		return "⚪"
+	}
+}
+
+// formatStacktrace formats the stacktrace for display in a comment
+func formatStacktrace(frames []stackFrame, maxFrames int) string {
+	if len(frames) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("**Stacktrace:**\n```\n")
+
+	limit := len(frames)
+	if maxFrames > 0 && limit > maxFrames {
+		limit = maxFrames
+	}
+
+	for i := 0; i < limit; i++ {
+		frame := frames[i]
+		prefix := "  "
+		if frame.InProject {
+			prefix = "→ " // highlight in-project frames
+		}
+
+		file := frame.File
+		if file == "" {
+			file = "<unknown>"
+		}
+
+		method := frame.Method
+		if method == "" {
+			method = "<anonymous>"
+		}
+
+		line := ""
+		if frame.LineNumber != nil {
+			line = fmt.Sprintf(":%v", frame.LineNumber)
+		}
+
+		sb.WriteString(fmt.Sprintf("%s%s%s in %s\n", prefix, file, line, method))
+	}
+
+	if len(frames) > limit {
+		sb.WriteString(fmt.Sprintf("  ... and %d more frames\n", len(frames)-limit))
+	}
+
+	sb.WriteString("```")
+	return sb.String()
 }
 
 func (p *Plugin) upsertErrorCard(mm *MMClient, channelID string, payload webhookPayload, cfg Configuration) error {
@@ -246,7 +555,10 @@ func (p *Plugin) upsertErrorCard(mm *MMClient, channelID string, payload webhook
 		return fmt.Errorf("channelID is required")
 	}
 
-	key := errorPostKVKey(payload.ProjectID, payload.ErrorID)
+	projectID := payload.getProjectID()
+	errorID := payload.getErrorID()
+
+	key := errorPostKVKey(projectID, errorID)
 	var mapping ErrorPostMapping
 	found, appErr := mm.LoadJSON(key, &mapping)
 	if appErr != nil {
@@ -272,8 +584,10 @@ func (p *Plugin) upsertErrorCard(mm *MMClient, channelID string, payload webhook
 			return fmt.Errorf("update post: %w", appErr)
 		}
 
-		if payload.Event != "" {
-			if _, appErr := mm.CreateReply(mapping.ChannelID, mapping.PostID, fmt.Sprintf("Webhook event: %s", payload.Event)); appErr != nil {
+		// Add update comment with trigger info
+		if payload.Trigger.Type != "" {
+			replyMsg := fmt.Sprintf("🔄 **Update**: %s", payload.Trigger.Message)
+			if _, appErr := mm.CreateReply(mapping.ChannelID, mapping.PostID, replyMsg); appErr != nil {
 				mm.LogDebug("failed to append webhook reply", "err", appErr.Error())
 			}
 		}
@@ -281,20 +595,33 @@ func (p *Plugin) upsertErrorCard(mm *MMClient, channelID string, payload webhook
 		return nil
 	}
 
+	// Create new post
 	post, appErr := mm.CreatePost(channelID, title, attachments)
 	if appErr != nil {
 		return fmt.Errorf("create post: %w", appErr)
 	}
 
+	// Store mapping for future updates
 	mapping = ErrorPostMapping{
-		ProjectID: payload.ProjectID,
-		ErrorID:   payload.ErrorID,
+		ProjectID: projectID,
+		ErrorID:   errorID,
 		ChannelID: channelID,
 		PostID:    post.Id,
 	}
 
 	if err := mm.StoreJSON(key, mapping); err != nil {
 		mm.LogDebug("failed to store error→post mapping", "err", err.Error())
+	}
+
+	// Add stacktrace as first reply if available
+	stacktrace := payload.getStacktrace()
+	if len(stacktrace) > 0 {
+		traceComment := formatStacktrace(stacktrace, 15) // limit to 15 frames
+		if traceComment != "" {
+			if _, appErr := mm.CreateReply(channelID, post.Id, traceComment); appErr != nil {
+				mm.LogDebug("failed to add stacktrace reply", "err", appErr.Error())
+			}
+		}
 	}
 
 	return nil

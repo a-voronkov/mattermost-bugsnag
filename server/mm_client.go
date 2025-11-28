@@ -14,14 +14,19 @@ type MMClient struct {
 	api         plugin.API
 	debug       bool
 	kvNamespace string
+	botUserID   string
 }
 
-func newMMClient(api plugin.API, debug bool, namespace string) *MMClient {
-	return &MMClient{api: api, debug: debug, kvNamespace: namespace}
+func newMMClient(api plugin.API, debug bool, namespace, botUserID string) *MMClient {
+	return &MMClient{api: api, debug: debug, kvNamespace: namespace, botUserID: botUserID}
 }
 
 func (c *MMClient) CreatePost(channelID, message string, attachments []*model.SlackAttachment) (*model.Post, *model.AppError) {
-	post := &model.Post{ChannelId: channelID, Message: message}
+	post := &model.Post{
+		ChannelId: channelID,
+		Message:   message,
+		UserId:    c.botUserID,
+	}
 
 	if len(attachments) > 0 {
 		post.Props = map[string]interface{}{"attachments": attachments}

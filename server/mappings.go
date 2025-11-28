@@ -10,15 +10,15 @@ import (
 // ChannelRule describes where to send a Bugsnag event for a given project, and
 // what filters must match before posting.
 type ChannelRule struct {
+	ID           string   `json:"id"`
+	ProjectID    string   `json:"project_id"`
+	ProjectName  string   `json:"project_name,omitempty"`
 	ChannelID    string   `json:"channel_id"`
+	ChannelName  string   `json:"channel_name,omitempty"`
 	Environments []string `json:"environments,omitempty"`
 	Severities   []string `json:"severities,omitempty"`
 	Events       []string `json:"events,omitempty"`
 }
-
-// ProjectChannelMappings is a map keyed by Bugsnag project ID, with one or more
-// channel rules per project.
-type ProjectChannelMappings map[string][]ChannelRule
 
 // ErrorPostMapping stores where a specific Bugsnag error was posted in
 // Mattermost so subsequent webhook deliveries can update the same card.
@@ -53,28 +53,39 @@ func loadUserMappings(mm *MMClient) ([]UserMapping, error) {
 	return mappings, nil
 }
 
-func loadProjectChannelMappings(mm *MMClient) (ProjectChannelMappings, error) {
-	var mappings ProjectChannelMappings
-	found, appErr := mm.LoadJSON(KVKeyProjectChannelMappings, &mappings)
+func loadChannelRules(mm *MMClient) ([]ChannelRule, error) {
+	var rules []ChannelRule
+	found, appErr := mm.LoadJSON(KVKeyProjectChannelMappings, &rules)
 	if appErr != nil {
-		return nil, fmt.Errorf("load project/channel mappings: %w", appErr)
+		return nil, fmt.Errorf("load channel rules: %w", appErr)
 	}
 	if !found {
-		return ProjectChannelMappings{}, nil
+		return []ChannelRule{}, nil
 	}
-	return mappings, nil
+	return rules, nil
+}
+
+// getRulesForProject returns all channel rules that match the given project ID.
+func getRulesForProject(rules []ChannelRule, projectID string) []ChannelRule {
+	var matching []ChannelRule
+	for _, r := range rules {
+		if r.ProjectID == projectID {
+			matching = append(matching, r)
+		}
+	}
+	return matching
 }
 
 func matchesRule(rule ChannelRule, payload webhookPayload) bool {
-	if len(rule.Environments) > 0 && !containsValue(rule.Environments, payload.Environment) {
+	if len(rule.Environments) > 0 && !containsValue(rule.Environments, payload.getEnvironment()) {
 		return false
 	}
 
-	if len(rule.Severities) > 0 && !containsValue(rule.Severities, payload.Severity) {
+	if len(rule.Severities) > 0 && !containsValue(rule.Severities, payload.getSeverity()) {
 		return false
 	}
 
-	if len(rule.Events) > 0 && !containsValue(rule.Events, payload.Event) {
+	if len(rule.Events) > 0 && !containsValue(rule.Events, payload.Trigger.Type) {
 		return false
 	}
 

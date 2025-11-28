@@ -12,21 +12,23 @@ import (
 
 // UserMapping connects a Mattermost user to a Bugsnag user.
 type UserMapping struct {
-	BugsnagUserID string `json:"bugsnag_user_id,omitempty"`
-	BugsnagEmail  string `json:"bugsnag_email,omitempty"`
-	MMUserID      string `json:"mm_user_id,omitempty"`
+	MattermostUserID   string `json:"mattermost_user_id"`
+	MattermostUsername string `json:"mattermost_username,omitempty"`
+	BugsnagUserID      string `json:"bugsnag_user_id,omitempty"`
+	BugsnagEmail       string `json:"bugsnag_email,omitempty"`
 }
 
 // ChannelRule describes where to send a Bugsnag event for a given project.
 type ChannelRule struct {
+	ID           string   `json:"id"`
+	ProjectID    string   `json:"project_id"`
+	ProjectName  string   `json:"project_name,omitempty"`
 	ChannelID    string   `json:"channel_id"`
+	ChannelName  string   `json:"channel_name,omitempty"`
 	Environments []string `json:"environments,omitempty"`
 	Severities   []string `json:"severities,omitempty"`
 	Events       []string `json:"events,omitempty"`
 }
-
-// ProjectChannelMappings is a map keyed by Bugsnag project ID.
-type ProjectChannelMappings map[string][]ChannelRule
 
 // KVStore defines the minimal operations needed for API storage.
 type KVStore interface {
@@ -61,6 +63,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		r.handleProjects(w, req)
 	case path == "/organizations":
 		r.handleOrganizations(w, req)
+	case path == "/collaborators":
+		r.handleCollaborators(w, req)
 	case path == "/user-mappings":
 		r.handleUserMappings(w, req)
 	case path == "/channel-rules":
@@ -173,7 +177,62 @@ func (r *Router) handleOrganizations(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-const kvKeyUserMappings = "user_mappings"
+func (r *Router) handleCollaborators(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	token := r.config.TokenProvider()
+	if token == "" {
+		writeError(w, http.StatusUnauthorized, "Bugsnag API token not configured")
+		return
+	}
+
+	client, err := bugsnag.NewDefaultClient(token)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create Bugsnag client: "+err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(req.Context(), 10*time.Second)
+	defer cancel()
+
+	// Get organization ID from config or fetch first org
+	orgID := ""
+	if r.config.OrgIDProvider != nil {
+		orgID = strings.TrimSpace(r.config.OrgIDProvider())
+	}
+
+	if orgID == "" {
+		orgs, err := client.GetOrganizations(ctx)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "failed to fetch organizations: "+err.Error())
+			return
+		}
+		if len(orgs) == 0 {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"collaborators": []any{},
+				"message":       "No organizations found",
+			})
+			return
+		}
+		orgID = orgs[0].ID
+	}
+
+	collaborators, err := client.GetCollaborators(ctx, orgID)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "failed to fetch collaborators: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"collaborators":   collaborators,
+		"organization_id": orgID,
+	})
+}
+
+const kvKeyUserMappings = "bugsnag:user-mappings"
 
 func (r *Router) handleUserMappings(w http.ResponseWriter, req *http.Request) {
 	if r.config.KVStore == nil {
@@ -242,7 +301,7 @@ func (r *Router) saveUserMappings(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-const kvKeyChannelRules = "project_channel_mappings"
+const kvKeyChannelRules = "bugsnag:project-channel-mappings"
 
 func (r *Router) handleChannelRules(w http.ResponseWriter, req *http.Request) {
 	if r.config.KVStore == nil {
@@ -267,26 +326,26 @@ func (r *Router) getChannelRules(w http.ResponseWriter) {
 		return
 	}
 
-	var mappings ProjectChannelMappings
+	var rules []ChannelRule
 	if len(data) > 0 {
-		if err := json.Unmarshal(data, &mappings); err != nil {
+		if err := json.Unmarshal(data, &rules); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to parse channel rules: "+err.Error())
 			return
 		}
 	}
 
-	if mappings == nil {
-		mappings = ProjectChannelMappings{}
+	if rules == nil {
+		rules = []ChannelRule{}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"mappings": mappings,
+		"rules": rules,
 	})
 }
 
 func (r *Router) saveChannelRules(w http.ResponseWriter, req *http.Request) {
 	var payload struct {
-		Mappings ProjectChannelMappings `json:"mappings"`
+		Rules []ChannelRule `json:"rules"`
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
@@ -294,7 +353,7 @@ func (r *Router) saveChannelRules(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	data, err := json.Marshal(payload.Mappings)
+	data, err := json.Marshal(payload.Rules)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to encode channel rules: "+err.Error())
 		return
@@ -306,8 +365,8 @@ func (r *Router) saveChannelRules(w http.ResponseWriter, req *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"mappings": payload.Mappings,
+		"status": "ok",
+		"rules":  payload.Rules,
 	})
 }
 

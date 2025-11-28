@@ -63,6 +63,13 @@ type ErrorDetails struct {
 	URL           string `json:"url,omitempty"`
 }
 
+// Collaborator represents a user with access to a Bugsnag organization.
+type Collaborator struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
 // NewClient constructs a Client instance.
 func NewClient(rawBaseURL, token string, httpClient *http.Client) (*Client, error) {
 	if rawBaseURL == "" {
@@ -105,6 +112,18 @@ func (c *Client) GetProjects(ctx context.Context, orgID string) ([]Project, erro
 	}
 
 	return projects, nil
+}
+
+// GetCollaborators retrieves all users (collaborators) for the given organization.
+func (c *Client) GetCollaborators(ctx context.Context, orgID string) ([]Collaborator, error) {
+	endpoint := fmt.Sprintf("/organizations/%s/collaborators", url.PathEscape(orgID))
+
+	var collaborators []Collaborator
+	if err := c.do(ctx, http.MethodGet, endpoint, nil, &collaborators); err != nil {
+		return nil, err
+	}
+
+	return collaborators, nil
 }
 
 // GetError retrieves detailed information about a specific error.

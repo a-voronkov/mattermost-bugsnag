@@ -3,10 +3,16 @@
     "allowJs": true,
     "target": "ES6",
     "module": "ESNext",
+    "moduleResolution": "node",
     "jsx": "react",
     "esModuleInterop": true,
     "strict": false,
     "baseUrl": "./src",
+    "paths": {
+      "components/admin_console/plugin_settings": ["./stubs/plugin_settings"],
+      "components/admin_console/settings/text_setting": ["./stubs/text_setting"],
+      "components/widgets/buttons": ["./stubs/buttons"]
+    },
     "typeRoots": [
       "./src/types",
       "./node_modules/@types"

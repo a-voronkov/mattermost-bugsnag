@@ -11,20 +11,17 @@ module.exports = {
     },
     resolve: {
         extensions: ['.ts', '.tsx', '.js', '.jsx'],
+        modules: [path.resolve(__dirname, 'src'), 'node_modules'],
         alias: {
-            // Mattermost webapp components are provided at runtime
-            'components/admin_console/plugin_settings': path.resolve(__dirname, 'src/types/modules.d.ts'),
-            'components/admin_console/settings/text_setting': path.resolve(__dirname, 'src/types/modules.d.ts'),
-            'components/widgets/buttons': path.resolve(__dirname, 'src/types/modules.d.ts'),
+            // Mattermost webapp components - use stubs for build
+            'components/admin_console/plugin_settings$': path.resolve(__dirname, 'src/stubs/plugin_settings.ts'),
+            'components/admin_console/settings/text_setting$': path.resolve(__dirname, 'src/stubs/text_setting.ts'),
+            'components/widgets/buttons$': path.resolve(__dirname, 'src/stubs/buttons.ts'),
         },
     },
     externals: {
         react: 'React',
         'react-dom': 'ReactDOM',
-        // Mattermost webapp provides these at runtime
-        'components/admin_console/plugin_settings': 'PluginSettings',
-        'components/admin_console/settings/text_setting': 'TextSetting',
-        'components/widgets/buttons': 'Button',
     },
     module: {
         rules: [

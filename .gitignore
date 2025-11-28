@@ -1,0 +1,63 @@
+# Build artifacts
+dist/
+*.tar.gz
+*.zip
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+server/dist/
+
+# Test binary
+*.test
+
+# Go coverage
+*.out
+coverage.html
+
+# Go vendor (if not committed)
+# vendor/
+
+# Node.js / Webapp
+webapp/node_modules/
+webapp/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE / Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Local environment
+.env
+.env.local
+.env.*.local
+*.local
+
+# Debug logs
+debug.log
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+

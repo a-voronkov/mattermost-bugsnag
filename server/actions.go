@@ -45,7 +45,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := p.getConfiguration()
-	mm := newMMClient(p.API, cfg.EnableDebugLog, p.kvNS())
+	mm := newMMClient(p.API, cfg.EnableDebugLog, p.kvNS(), p.botUserID)
 
 	bugsnagClient, err := bugsnag.NewDefaultClient(cfg.BugsnagAPIToken)
 	if err != nil {

@@ -12,10 +12,16 @@
       "windows-amd64": "server/dist/plugin-windows-amd64.exe"
     }
   },
+  "props": {
+    "bot_username": "bugsnag",
+    "bot_display_name": "Bugsnag",
+    "bot_description": "Bot for Bugsnag integration - posts error notifications to channels."
+  },
   "webapp": {
     "bundle_path": "webapp/dist/main.js"
   },
   "settings_schema": {
+    "header": "Configure Bugsnag integration settings below.",
     "settings": [
       {
         "key": "BugsnagAPIToken",
@@ -58,6 +64,18 @@
         "type": "number",
         "help_text": "How frequently the plugin polls Bugsnag for updates to active errors.",
         "default": 300
+      },
+      {
+        "key": "ChannelMappings",
+        "display_name": "Project → Channel Mappings",
+        "type": "custom",
+        "help_text": "Map Bugsnag projects to Mattermost channels for webhook notifications."
+      },
+      {
+        "key": "UserMappings",
+        "display_name": "User Mappings",
+        "type": "custom",
+        "help_text": "Map Mattermost users to Bugsnag users for error assignment."
       }
     ]
   }
