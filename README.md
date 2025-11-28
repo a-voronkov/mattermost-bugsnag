@@ -40,23 +40,35 @@ Technical specification and draft architecture for a Mattermost plugin integrate
 ## Supporting documents
 
 - Full technical description of requirements, data flows, and UI lives in [`initial-plan.md`](initial-plan.md).
+- Local Mattermost setup instructions for manual plugin testing are in [`docs/local-testing.md`](docs/local-testing.md).
 
 ## Repository status
 
 - Minimal server plugin scaffold in Go (`server/`):
   - `plugin.go` registers `/webhook` and `/actions` via `ServeHTTP` and loads configuration.
-  - `webhook.go` validates tokens, applies project→channel mapping rules (with
-    filters for environment/severity/event), stores error→post mappings, and can
-    render a provisional card when `channel_id` is supplied in the webhook query.
-  - `actions.go` accepts payloads, maps Mattermost users to Bugsnag users (KV +
-    email fallback), records action notes in the corresponding error thread, and
-    invokes the Bugsnag API client for assignment and status updates.
-  - `bugsnag_client.go` is a focused HTTP client for status and assignment
-    updates with API token auth.
+  - `webhook.go` validates tokens, applies project→channel mapping rules (with filters for environment/severity/event), stores error→post mappings, and can render a provisional card when `channel_id` is supplied in the webhook query.
+  - `actions.go` accepts payloads, maps Mattermost users to Bugsnag users (KV + email fallback), records action notes in the corresponding error thread, and invokes the Bugsnag API client for assignment and status updates.
+  - `bugsnag_client.go` is a focused HTTP client for status and assignment updates with API token auth.
   - `message_templates.go` contains draft card/action structures.
-  - `mm_client.go` wraps Mattermost API calls for posts, KV JSON, users, and channels
-    with optional debug logging.
+  - `mm_client.go` wraps Mattermost API calls for posts, KV JSON, users, and channels with optional debug logging.
 - `plugin.json` defines the plugin manifest, admin settings, and expected build artifacts.
 - `docs/` holds sample payloads and the TODO checklist for turning the scaffold into a working build.
 
-Next step: copy the Makefile and webapp from `mattermost-plugin-starter-template`, attach REST endpoints for the admin console, and implement webhook/interactive logic per `docs/todo.md`.
+## Development and testing
+
+- Go module files live under `server/`. Run Go commands from that directory:
+
+  ```bash
+  cd server
+  go test ./...
+  ```
+
+- The module depends on the upstream Mattermost server packages. Fetching those dependencies requires outbound access to GitHub (or an internal GOPROXY). If downloads are blocked, tests and `go mod tidy` will fail to resolve modules.
+
+## Progress and next steps
+
+- Server scaffold: webhook/actions endpoints, configuration validation, a lightweight Bugsnag client, and a Mattermost API wrapper are in place. Webhook and action handlers can upsert a provisional card and write thread notes but still need payload normalization and richer card fields.
+- Admin UI/webapp: not yet ported from the plugin starter template; REST endpoints for admin settings remain to be added.
+- Packaging: Makefile and webapp bundle are still missing from the starter template.
+
+See [`docs/todo.md`](docs/todo.md) for a detailed tracker of what is implemented and what remains.
