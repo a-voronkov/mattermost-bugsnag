@@ -27,6 +27,10 @@ func (p *Plugin) OnConfigurationChange() error {
 		return err
 	}
 
+	if err := configuration.Validate(); err != nil {
+		return err
+	}
+
 	p.configuration.Store(&configuration)
 	return nil
 }

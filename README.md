@@ -1,54 +1,62 @@
 # Mattermost Bugsnag Integration Plugin
 
-Техническое задание и черновая архитектура для плагина Mattermost, интегрированного с Bugsnag. Проект нацелен на автоматическую доставку уведомлений об ошибках в каналы Mattermost, быстрые действия по статусам и удобное администрирование через System Console.
+Technical specification and draft architecture for a Mattermost plugin integrated with Bugsnag. The project aims to deliver error notifications into Mattermost channels, provide quick status actions, and offer easy administration through the System Console.
 
-## Основные возможности
+## Key capabilities
 
-- Подключение к Bugsnag через персональный API token и опциональный Organization ID.
-- Получение событий ошибок по Webhook и публикация карточек с кнопками действий в выбранные каналы Mattermost.
-- Отслеживание статусов, повторений и времени последнего происшествия с обновлениями в тредах.
-- Маппинг пользователей Bugsnag ↔ Mattermost для корректных упоминаний и reassignment из карточек.
-- Админ‑UI в System Console: подключение, привязка проектов к каналам, правила уведомлений и настройка пользовательских соответствий.
+- Connect to Bugsnag using a personal API token and optional Organization ID.
+- Receive error events via webhook and post cards with action buttons into selected Mattermost channels.
+- Track statuses, recurrence, and last-occurrence timestamps with updates in threads.
+- Map Bugsnag users ↔ Mattermost users for correct mentions and reassignment from cards.
+- Admin UI in System Console: connectivity, project-to-channel mapping, notification rules, and user mapping.
 
-## Архитектура на высоком уровне
+## High-level architecture
 
 ### Server Plugin (Go)
 
-- Эндпоинты `/plugins/bugsnag/webhook` для приёма событий и `/plugins/bugsnag/actions` для интерактивных кнопок.
-- Клиент Bugsnag API для получения проектов, ошибок и управления статусами/исполнителями.
-- Использование Mattermost Plugin API для создания/обновления постов и хранения мэппингов в KV.
-- Планируется периодический синк активных ошибок для актуализации статистики.
+- Endpoints `/plugins/bugsnag/webhook` for events and `/plugins/bugsnag/actions` for interactive buttons.
+- Bugsnag API client for projects, errors, and status/assignee management.
+- Mattermost Plugin API for creating/updating posts and storing mappings in KV.
+- Planned periodic sync of active errors to keep statistics fresh.
 
 ### Webapp Plugin (React)
 
-- Страница настроек плагина в System Console с вкладками Connection, Projects & Channels, User Mapping и Notification Rules.
-- Опциональные UI-расширения (кнопка в channel header, RHS панель) для просмотра деталей ошибок.
+- System Console settings page with tabs for Connection, Projects & Channels, User Mapping, and Notification Rules.
+- Optional UI extensions (channel header button, RHS panel) for browsing error details.
 
 ### Bugsnag
 
-- Webhook, настраиваемый в Bugsnag UI, отправляет события на публичный URL плагина с секретным токеном.
-- REST API используется для чтения данных об ошибках/проектах и выполнения действий (изменение статуса, назначение исполнителя).
+- Webhook configured in the Bugsnag UI sends events to the plugin’s public URL with a secret token.
+- REST API used to read error/project data and perform actions (status changes, assignee updates).
 
-## Основные пользовательские сценарии
+## Main user flows
 
-1. **Подключение**: администратор вводит API token и, при необходимости, Organization ID. Плагин запрашивает список организаций/проектов и сохраняет их в KV.
-2. **Настройка Webhook**: в админке отображается URL вида `https://<mm-host>/plugins/bugsnag/webhook?token=<secret>`, который добавляется в настройках Bugsnag проекта.
-3. **Поступление ошибок**: Webhook-события фильтруются по выбранным каналам, окружениям и типам событий; для новых ошибок создаются карточки, для существующих — обновляются метрики и добавляются записи в тред.
-4. **Интерактивные действия**: кнопки «Assign to me», «Resolve», «Ignore», «Open in Bugsnag» вызывают серверный хендлер, который сопоставляет пользователей и обновляет состояние ошибки через Bugsnag API.
-5. **Периодический синк**: активные ошибки опрашиваются с заданным интервалом; карточки и треды дополняются свежей статистикой и значимыми изменениями.
+1. **Connection**: administrator enters the API token and, if needed, the Organization ID. The plugin fetches organizations/projects and stores them in KV.
+2. **Webhook setup**: the admin UI shows a URL like `https://<mm-host>/plugins/bugsnag/webhook?token=<secret>`, which is added in the Bugsnag project settings.
+3. **Incoming errors**: webhook events are filtered by configured channels, environments, and event types; new errors create cards, existing ones get metric updates and thread entries.
+4. **Interactive actions**: buttons “Assign to me”, “Resolve”, “Ignore”, “Open in Bugsnag” hit the server handler, which maps users and updates the error via the Bugsnag API.
+5. **Periodic sync**: active errors are polled at intervals; cards and threads are updated with fresh stats and significant changes.
 
-## Дополнительные материалы
+## Supporting documents
 
-- Полное техническое описание требований, потоков данных и UI доступно в [`initial-plan.md`](initial-plan.md).
+- Full technical description of requirements, data flows, and UI lives in [`initial-plan.md`](initial-plan.md).
 
-## Текущее состояние репозитория
+## Repository status
 
-- Добавлен минимальный каркас server-плагина на Go (`server/`):
-  - `plugin.go` регистрирует эндпоинты `/webhook` и `/actions` через `ServeHTTP` и загружает конфигурацию.
-  - `webhook.go` и `actions.go` принимают payload’ы, логируют их и отвечают заглушками (готовы для расширения).
-  - `message_templates.go` содержит черновые структуры карточек и действий.
-- `plugin.json` описывает манифест плагина, настройки админки и ожидаемые артефакты сборки.
-- В `docs/` лежат примеры payload’ов и чек-лист TODO для превращения каркаса в рабочий билд.
+- Minimal server plugin scaffold in Go (`server/`):
+  - `plugin.go` registers `/webhook` and `/actions` via `ServeHTTP` and loads configuration.
+  - `webhook.go` validates tokens, applies project→channel mapping rules (with
+    filters for environment/severity/event), stores error→post mappings, and can
+    render a provisional card when `channel_id` is supplied in the webhook query.
+  - `actions.go` accepts payloads, maps Mattermost users to Bugsnag users (KV +
+    email fallback), records action notes in the corresponding error thread, and
+    invokes the Bugsnag API client for assignment and status updates.
+  - `bugsnag_client.go` is a focused HTTP client for status and assignment
+    updates with API token auth.
+  - `message_templates.go` contains draft card/action structures.
+  - `mm_client.go` wraps Mattermost API calls for posts, KV JSON, users, and channels
+    with optional debug logging.
+- `plugin.json` defines the plugin manifest, admin settings, and expected build artifacts.
+- `docs/` holds sample payloads and the TODO checklist for turning the scaffold into a working build.
 
-Следующий шаг — скопировать Makefile и webapp из `mattermost-plugin-starter-template`, привязать REST-ручки под админку и реализовать логику webhook/interactive действий согласно `docs/todo.md`.
-
+Next step: copy the Makefile and webapp from `mattermost-plugin-starter-template`, attach REST endpoints for the admin console, and implement webhook/interactive logic per `docs/todo.md`.

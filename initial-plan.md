@@ -1,193 +1,168 @@
-# Mattermost Bugsnag Integration Plugin — Техническое задание
+# Mattermost Bugsnag Integration Plugin — Technical Specification
 
-## 1. Цели плагина
+## 1. Plugin goals
 
-Плагин для Mattermost, интегрированный с Bugsnag, должен:
+The Mattermost plugin integrated with Bugsnag must:
 
-1. Подключаться к Bugsnag через API (персональный API token).
-2. Получать события об ошибках через Bugsnag Webhook.
-3. Публиковать в выбранные каналы Mattermost **карточки багов** с кнопками действий.
-4. Обновлять информацию по ошибкам:
-
-   * текущий статус;
-   * количество повторений за последние N минут/часов;
-   * дата и время последнего происшествия.
-5. Вести в тредах к этим карточкам **историю изменений** (смена статусов, reassignment, спайки и т.п.).
-6. Поддерживать **маппинг пользователей** Bugsnag ↔ пользователей Mattermost:
-
-   * для @mention ответственных в сообщениях;
-   * для выставления ответственных в Bugsnag при нажатии кнопок в Mattermost.
-7. Иметь **UI админки-настроек** в System Console:
-
-   * ввод Bugsnag API токена / организации;
-   * настройка соответствия проектов Bugsnag и каналов Mattermost;
-   * настройка правил уведомлений;
-   * настройка маппинга пользователей.
+1. Connect to Bugsnag via API using a personal API token.
+2. Receive error events through a Bugsnag webhook.
+3. Post **bug cards** with action buttons into selected Mattermost channels.
+4. Keep error information up to date:
+   * current status;
+   * occurrence counts for the last N minutes/hours;
+   * date and time of the most recent occurrence.
+5. Maintain **change history** (status changes, reassignments, spikes, etc.) in threads attached to those cards.
+6. Support **user mapping** between Bugsnag and Mattermost users:
+   * for @mentions of assignees in messages;
+   * for setting assignees in Bugsnag when buttons are pressed in Mattermost.
+7. Provide a **System Console admin UI**:
+   * enter the Bugsnag API token/organization;
+   * configure project-to-channel mappings;
+   * configure notification rules;
+   * configure user mappings.
 
 ---
 
-## 2. Архитектура решения
+## 2. Architecture
 
-### 2.1. Компоненты
+### 2.1. Components
 
 1. **Server plugin (Go)**
-
-   * HTTP endpoint для приема Webhook от Bugsnag: `/plugins/bugsnag/webhook`.
-   * HTTP endpoint для обработки нажатий на кнопки (interactive actions): `/plugins/bugsnag/actions`.
-   * Клиент для Bugsnag API (REST).
-   * Работа с Mattermost через Plugin API:
-
-     * создание и обновление постов;
-     * создание тредов и ответов;
-     * KV-хранилище (mappings, активные ошибки, конфигурация).
-   * Периодический scheduler (goroutine) для обновления статистики по активным ошибкам.
+   * HTTP endpoint for receiving the Bugsnag webhook: `/plugins/bugsnag/webhook`.
+   * HTTP endpoint for processing button presses (interactive actions): `/plugins/bugsnag/actions`.
+   * Client for the Bugsnag REST API.
+   * Mattermost Plugin API usage:
+     * create and update posts;
+     * create threads and replies;
+     * KV storage (mappings, active errors, configuration).
+   * Periodic scheduler (goroutine) to refresh statistics for active errors.
 
 2. **Webapp plugin (JS/TS/React)**
-
-   * Страница настроек плагина в System Console → Plugins → Bugsnag Integration.
-   * (Опционально) дополнительные UI-элементы:
-
-     * кнопка в channel header;
-     * правая панель (RHS) для просмотра деталей по ошибке/фильтров.
+   * Settings page in System Console → Plugins → Bugsnag Integration.
+   * (Optional) additional UI elements:
+     * channel header button;
+     * right-hand side (RHS) panel for viewing error details/filters.
 
 3. **Bugsnag**
-
-   * Webhook на URL `https://<mattermost-host>/plugins/bugsnag/webhook?token=<secret>`.
-   * Data Access API и другие публичные API:
-
-     * получение списка организаций/проектов/ошибок;
-     * чтение информации о конкретной ошибке;
-     * изменение статуса/assignee (по доступным endpoint’ам);
-     * получение пользователей/коллабораторов (если доступно).
+   * Webhook to `https://<mattermost-host>/plugins/bugsnag/webhook?token=<secret>`.
+   * Data Access API and other public APIs:
+     * get organizations/projects/errors;
+     * read details of a specific error;
+     * change status/assignee (where endpoints permit);
+     * fetch users/collaborators (if available).
 
 ---
 
-## 3. Потоки данных
+## 3. Data flows
 
-### 3.1. «Спаривание» плагина с Bugsnag
+### 3.1. Pairing the plugin with Bugsnag
 
-1. Администратор Mattermost заходит в System Console → Plugins → Bugsnag Integration.
-2. Вводит:
-
+1. A Mattermost administrator opens System Console → Plugins → Bugsnag Integration.
+2. Inputs:
    * Bugsnag API Token;
-   * (опционально) Organization ID.
-3. Нажимает кнопку **Test connection / Load projects**.
-4. Server plugin:
+   * (optional) Organization ID.
+3. Clicks **Test connection / Load projects**.
+4. The server plugin:
+   * calls the Bugsnag API (by token) to fetch organizations/projects;
+   * stores the project list (id, name, slug) in KV.
 
-   * вызывает Bugsnag API (по токену) и получает список организаций/проектов;
-   * сохраняет список проектов (id, name, slug) в KV.
+### 3.2. Configuring the webhook in Bugsnag
 
-### 3.2. Настройка Webhook в Bugsnag
-
-> Предполагается, что Webhook в Bugsnag настраивается вручную через UI
+> The webhook is assumed to be configured manually in Bugsnag UI
 > (Project Settings → Integrations → Data forwarding → Webhook).
 
-Шаги:
+Steps:
 
-1. Плагин генерирует URL вида:
+1. The plugin generates a URL such as:
    `https://<mattermost-host>/plugins/bugsnag/webhook?token=<secret>`.
-2. В админке плагина этот URL показывается для каждого проекта.
-3. Администратор копирует URL и вставляет его при создании/настройке Webhook’а в Bugsnag.
-4. В Bugsnag включаются нужные типы событий (new error, spike, frequent error, reopened и т.п.).
+2. The admin UI displays this URL per project.
+3. The administrator copies the URL and pastes it when creating/configuring the webhook in Bugsnag.
+4. The desired event types are enabled in Bugsnag (new error, spike, frequent error, reopened, etc.).
 
-### 3.3. Новый баг / новое событие
+### 3.3. New bug / new event
 
-1. Bugsnag шлёт POST на `/plugins/bugsnag/webhook` с payload’ом ошибки/события.
-2. Server plugin:
+1. Bugsnag sends POST to `/plugins/bugsnag/webhook` with the error/event payload.
+2. The server plugin:
+   * validates the secret `token`;
+   * parses the payload: error_id, project_id, status, summary, counts, last_seen, environment, etc.
+3. By `project_id`, it reads from KV the list of **Mattermost channels** subscribed to that project:
+   * filter by severity;
+   * by environment (prod, staging, dev);
+   * by event type (new, spike, reopened, etc.).
+4. For each matching channel:
+   * check whether a post already exists for `error_id` (via KV mapping `errorID+projectID → postID`);
+   * if no post:
+     * create a **new card** for the error in the channel;
+     * store the mapping `errorID+projectID → postID, channelID`;
+   * if a post exists:
+     * update the card (status, last_seen, counters);
+     * add a reply in the thread (change history).
 
-   * валидирует секретный `token`;
-   * парсит payload: error_id, project_id, статус, summary, counts, last_seen, environment и т.д.
-3. По `project_id` читает из KV список **каналов Mattermost**, подписанных на этот проект:
+### 3.4. Button press on the card
 
-   * фильтрация по severity;
-   * по окружению (prod, staging, dev);
-   * по типу события (new, spike, reopened и т.п.).
-4. Для каждого подходящего канала:
-
-   * проверяет, есть ли уже пост для `error_id` (по KV-мэппингу `errorID+projectID → postID`);
-   * если поста нет:
-
-     * создаёт **новую карточку** ошибки в канале;
-     * сохраняет связь `errorID+projectID → postID, channelID`;
-   * если пост есть:
-
-     * обновляет карточку (статус, last_seen, счётчики);
-     * добавляет reply в тред (история изменений).
-
-### 3.4. Нажатие на кнопку в карточке
-
-1. Пользователь нажимает кнопку (например, «Assign to me», «Resolve», «Ignore»).
-2. Mattermost отправляет POST на `/plugins/bugsnag/actions` с:
-
+1. A user clicks a button (e.g., “Assign to me”, “Resolve”, “Ignore”).
+2. Mattermost sends POST to `/plugins/bugsnag/actions` with:
    * `user_id` (Mattermost);
-   * `context` (action, error_id, project_id и т.п.).
-3. Server plugin:
-
-   * извлекает из `context` данные об ошибке;
-   * по `user_id` получает email/данные пользователя Mattermost;
-   * по таблице маппинга находит соответствующего Bugsnag-пользователя (по email или ID).
-4. Вызывает Bugsnag API:
-
-   * меняет статус ошибки (open / in-progress / fixed / ignored);
-   * при необходимости меняет assignee на соответствующего Bugsnag-пользователя.
-5. После успешного ответа Bugsnag:
-
-   * обновляет содержимое карточки (status, assigned to);
-   * добавляет reply в тред вида:
+   * `context` (action, error_id, project_id, etc.).
+3. The server plugin:
+   * extracts error data from `context`;
+   * fetches Mattermost user data by `user_id` (email, etc.);
+   * uses the mapping table to find the corresponding Bugsnag user (by email or ID).
+4. Calls the Bugsnag API:
+   * change the error status (open / in-progress / fixed / ignored);
+   * optionally change the assignee to the mapped Bugsnag user.
+5. After Bugsnag succeeds:
+   * update the card content (status, assigned to);
+   * add a reply in the thread like
      `@mm-user changed status to "In progress" and assigned to @mm-user`;
-   * (опционально) отправляет ephemeral-ответ инициатору действия.
+   * optionally send an ephemeral response to the action initiator.
 
-### 3.5. Периодический sync статистики
+### 3.5. Periodic sync of statistics
 
-1. Плагин хранит список активных ошибок (например, open/in-progress) в KV:
-
+1. The plugin stores a list of active errors (e.g., open/in-progress) in KV:
    * `error_id, project_id, post_id, channel_id, last_synced_at`.
-2. Scheduler (goroutine) раз в N минут:
-
-   * обходит активные ошибки;
-   * опрашивает Bugsnag API:
-
-     * статус;
-     * количество событий за последние X минут/часов;
+2. A scheduler goroutine runs every N minutes:
+   * iterates over active errors;
+   * calls the Bugsnag API:
+     * status;
+     * event counts over the last X minutes/hours;
      * `last_seen`.
-3. После обновления:
-
-   * модифицирует текст карточки/attachment;
-   * при значимых изменениях добавляет запись в тред (например, резкий рост количества событий).
+3. After updating:
+   * modify the card/attachment text;
+   * add a thread entry for significant changes (e.g., a sharp spike in events).
 
 ---
 
-## 4. Формат карточки сообщения
+## 4. Message card format
 
-### 4.1. Визуальное представление
+### 4.1. Visual representation
 
-Пример поста в канале:
+Example post in a channel:
 
 > :rotating_light: **[BUG]** NullReferenceException in CheckoutController
 > Project: `my-backend-api` · Env: `production` · Status: **Open**
 
-Attachment содержит:
+Attachment includes:
 
-* Заголовок: краткое описание ошибки.
-* Ссылка на ошибку в Bugsnag.
-* Текст:
-
+* Title: concise error summary.
+* Link to the error in Bugsnag.
+* Text:
   * Environment
   * Severity
   * Release / version
-  * Кол-во уникальных пользователей (affected users)
-  * Events за 1h / 24h
-  * Last seen (UTC или локальное время)
+  * Number of affected users
+  * Events for 1h / 24h
+  * Last seen (UTC or local time)
 * Footer: `Bugsnag • <project-name>`
 
-Кнопки действий:
+Action buttons:
 
 * `🙋 Assign to me`
 * `✅ Resolve`
 * `🙈 Ignore`
 * `🔗 Open in Bugsnag`
 
-### 4.2. Упрощённый JSON payload (логика, не финальный код)
+### 4.2. Simplified JSON payload (logic, not final code)
 
 ```json
 {
@@ -266,35 +241,33 @@ Attachment содержит:
 
 ---
 
-## 5. UI админки (System Console)
+## 5. Admin UI (System Console)
 
-Админка плагина разделена на вкладки.
+The admin UI is divided into tabs.
 
-### 5.1. Вкладка **Connection**
+### 5.1. **Connection** tab
 
-Поля:
+Fields:
 
-* **Bugsnag API Token** (обязательное).
-* **Organization ID** (опциональное).
-* Кнопка **Test connection**:
+* **Bugsnag API Token** (required).
+* **Organization ID** (optional).
+* **Test connection** button:
+  * call Bugsnag;
+  * show status (OK/error) and basic info (e.g., list of organizations).
 
-  * запрос к Bugsnag;
-  * вывод статуса (OK / ошибка) и базовой информации (например, список организаций).
+### 5.2. **Projects & Channels** tab
 
-### 5.2. Вкладка **Projects & Channels**
+Capabilities:
 
-Функции:
-
-* Список проектов Bugsnag (подгружается через API).
-* Для каждого проекта указываются:
-
+* List Bugsnag projects (pulled via API).
+* For each project:
   * Mattermost Team (dropdown).
   * Mattermost Channel (dropdown).
-  * Environments (multi-select: prod, staging, dev и т.д.).
+  * Environments (multi-select: prod, staging, dev, etc.).
   * Severities (multi-select: error, warning, info).
-  * Типы событий для репортинга (checkbox’ы: new error, spike, frequent, reopened и т.п.).
+  * Event types to report (checkboxes: new error, spike, frequent, reopened, etc.).
 
-Пример структуры:
+Example structure:
 
 ```go
 type ProjectChannelMapping struct {
@@ -306,176 +279,153 @@ type ProjectChannelMapping struct {
 }
 ```
 
-Кнопка **Sync projects from Bugsnag**:
+**Sync projects from Bugsnag** button:
 
-* заново вытягивает список проектов по API;
-* обновляет локальный список, не затирая уже настроенные каналы (по ProjectID).
+* refetch projects via API;
+* refresh the local list without overwriting existing channel assignments (by ProjectID).
 
-### 5.3. Вкладка **User Mapping**
+### 5.3. **User Mapping** tab
 
-Цель: связать пользователей Bugsnag с пользователями Mattermost.
+Purpose: connect Bugsnag users to Mattermost users.
 
 UI:
 
-* Кнопка **Load Bugsnag users**:
-
-  * тянет список Bugsnag-пользователей/коллабораторов (id, имя, email).
-* Таблица:
-
+* **Load Bugsnag users** button:
+  * fetch list of Bugsnag users/collaborators (id, name, email).
+* Table:
   * Bugsnag Name
   * Bugsnag Email
-  * Bugsnag User ID (если есть)
-  * Mattermost User (dropdown: список пользователей MM)
-  * Авто-подбор MM-пользователя по email (pre-select, можно изменить руками).
+  * Bugsnag User ID (if present)
+  * Mattermost User (dropdown: Mattermost users)
+  * Auto-select the Mattermost user by email (pre-select, editable).
 
-Структура:
+Structure:
 
 ```go
 type UserMapping struct {
-    BugsnagUserID string // или пусто, если мэппинг только по email
+    BugsnagUserID string // or empty if mapping is email-only
     BugsnagEmail  string
     MMUserID      string
 }
 ```
 
-Использование:
+Usage:
 
-* При рендере карточки:
+* When rendering a card:
+  * if the error is assigned to a Bugsnag user with email X → find mapping → display `Assigned to @mm-user`.
+* When clicking “Assign to me”:
+  * Mattermost user → their email → find Bugsnag user → call Bugsnag API for reassignment.
 
-  * если ошибка назначена на Bugsnag-пользователя с email X → ищем мэппинг → выводим `Assigned to @mm-user`.
-* При нажатии «Assign to me»:
+### 5.4. **Notification Rules & Advanced** tab
 
-  * Mattermost user → его email → поиск Bugsnag-пользователя → API Bugsnag для reassignment.
+Parameters:
 
-### 5.4. Вкладка **Notification Rules & Advanced**
-
-Параметры:
-
-* Временные окна для статистики:
-
-  * Events window (например: 1h / 24h).
-* Параметры спайков (опционально):
-
-  * пример: «считать спайком, если events за 10 минут > X».
+* Time windows for statistics:
+  * Events window (e.g., 1h / 24h).
+* Spike parameters (optional):
+  * e.g., “treat as spike if events in 10 minutes > X”.
 * Periodic sync interval:
-
-  * интервал в минутах (например, 5/10/15).
+  * interval in minutes (e.g., 5/10/15).
 * Security:
-
-  * Secret token для Webhook (в query или header).
+  * Secret token for webhook (in query or header).
 * Logging:
-
-  * включение/выключение debug-логов.
+  * enable/disable debug logs.
 
 ---
 
-## 6. Шаги разработки (чек-лист)
+## 6. Development steps (checklist)
 
-1. **Базовый каркас плагина**
-
-   * Склонировать `mattermost-plugin-starter-template`.
-   * Переименовать под `mattermost-plugin-bugsnag`.
-   * Обновить manifest (Plugin ID, название, описание, роуты).
+1. **Basic plugin scaffold**
+   * Clone `mattermost-plugin-starter-template`.
+   * Rename to `mattermost-plugin-bugsnag`.
+   * Update manifest (Plugin ID, name, description, routes).
 
 2. **Server plugin (Go)**
-
-   * Описать структуру `Configuration`.
-   * Реализовать:
-
-     * `OnConfigurationChange` — чтение/валидация конфигурации;
-     * роуты `/webhook` и `/actions`.
-   * Инициализация KV-хранилища.
+   * Define `Configuration` structure.
+   * Implement:
+     * `OnConfigurationChange` — read/validate configuration;
+     * routes `/webhook` and `/actions`.
+   * Initialize KV storage.
 
 3. **Bugsnag client**
-
-   * Модуль с функциями:
-
+   * Module with functions:
      * `GetOrganizations()`
      * `GetProjects(orgID)`
      * `GetErrors(projectID, filters)`
      * `GetError(errorID)`
-     * `GetUsers(orgID)` (если доступно)
+     * `GetUsers(orgID)` (if available)
      * `UpdateErrorStatus(errorID, status)`
      * `AssignError(errorID, assignee)`
-   * Типы данных: Error, Project, User, Status и т.п.
+   * Data types: Error, Project, User, Status, etc.
 
 4. **Webhook handler (`/webhook`)**
-
-   * Приём и валидация запроса (token).
-   * Парс payload’а Bugsnag.
-   * Определение проекта и каналов по мэппингу.
-   * Создание/обновление карточки ошибки.
-   * Обновление KV: `errorID+projectID → postID`.
+   * Accept and validate request (token).
+   * Parse Bugsnag payload.
+   * Determine project and channels by mapping.
+   * Create/update error card.
+   * Update KV: `errorID+projectID → postID`.
 
 5. **Actions handler (`/actions`)**
-
-   * Разбор интерактивных действий:
-
+   * Parse interactive actions:
      * `context.action`, `context.error_id`, `context.project_id`.
-   * Получение информации о MM-пользователе (`user_id`).
-   * Маппинг Bugsnag ⇄ MM пользователь.
-   * Вызов Bugsnag API (статус, assignee).
-   * Обновление карточки и добавление записи в тред.
+   * Get Mattermost user info (`user_id`).
+   * Map Bugsnag ⇄ MM user.
+   * Call Bugsnag API (status, assignee).
+   * Update card and add thread entry.
 
 6. **Scheduler (periodic sync)**
+   * Start a goroutine with ticker at plugin start.
+   * Every N minutes:
+     * read list of active errors;
+     * call Bugsnag API:
+       * status;
+       * event counts over the last X minutes/hours;
+       * `last_seen`.
+   * After update:
+     * modify card/attachment text;
+     * add thread entries for significant changes.
 
-   * При старте плагина запуск goroutine с тикером.
-   * Раз в N минут:
-
-     * чтение списка активных ошибок;
-     * запросы в Bugsnag API;
-     * обновление карточек и тредов.
-
-7. **Webapp plugin (React) — UI настроек**
-
-   * Реализовать вкладки:
-
+7. **Webapp plugin (React) — settings UI**
+   * Implement tabs:
      * Connection;
      * Projects & Channels;
      * User Mapping;
      * Notification Rules & Advanced.
-   * REST-ручки для получения/сохранения конфигурации и мэппингов.
+   * REST endpoints on the server to fetch/save configuration and mappings.
 
-8. **Логирование и обработка ошибок**
+8. **Logging and error handling**
+   * Log Bugsnag API errors, invalid payloads, and Mattermost API failures.
+   * Optional fallback messages in threads for failed operations.
 
-   * Логирование ошибок Bugsnag API, неверных payload’ов, ошибок Mattermost API.
-   * Fallback-сообщения в тред при неудачных операциях (опционально).
-
-9. **Документация / README**
-
-   * Описание плагина и возможностей.
-   * Инструкции по сборке и установке.
-   * Инструкции по настройке подключения к Bugsnag и webhook’ов.
-   * Примеры типового сценария использования.
+9. **Documentation / README**
+   * Describe the plugin and capabilities.
+   * Build and install instructions.
+   * Configuration guidance for Bugsnag connectivity and webhooks.
+   * Example usage scenarios.
 
 ---
 
-## 7. Краткая инструкция по настройке (для админа)
+## 7. Quick setup guide (for admins)
 
-1. Установить и включить плагин в Mattermost.
-2. В System Console → Plugins → Bugsnag Integration:
-
-   * ввести Bugsnag API Token;
-   * указать Organization ID (если нужно);
-   * нажать **Test connection**.
-3. На вкладке **Projects & Channels**:
-
-   * нажать **Sync projects from Bugsnag**;
-   * выбрать Team + Channel для нужных проектов;
-   * задать фильтры по environment / severity / events;
-   * сохранить.
-4. На вкладке **User Mapping**:
-
-   * нажать **Load Bugsnag users**;
-   * сопоставить Bugsnag-пользователей с пользователями Mattermost;
-   * сохранить.
-5. В Bugsnag (UI) для каждого проекта:
-
+1. Install and enable the plugin in Mattermost.
+2. In System Console → Plugins → Bugsnag Integration:
+   * enter the Bugsnag API Token;
+   * specify Organization ID (if needed);
+   * click **Test connection**.
+3. On the **Projects & Channels** tab:
+   * click **Sync projects from Bugsnag**;
+   * choose Team + Channel for desired projects;
+   * set filters for environment / severity / events;
+   * save.
+4. On the **User Mapping** tab:
+   * click **Load Bugsnag users**;
+   * map Bugsnag users to Mattermost users;
+   * save.
+5. In Bugsnag (UI) for each project:
    * Project Settings → Integrations → Webhook/Data forwarding;
-   * добавить Webhook с URL из настроек плагина;
-   * выбрать события для отправки.
-6. Проверка:
-
-   * сгенерировать тестовую ошибку в Bugsnag;
-   * убедиться, что в соответствующем канале Mattermost появилась карточка;
-   * проверить работу кнопок (assign, resolve, ignore).
+   * add a webhook with the URL from the plugin settings;
+   * choose events to send.
+6. Verification:
+   * generate a test error in Bugsnag;
+   * ensure the corresponding card appears in the configured Mattermost channel;
+   * test buttons (assign, resolve, ignore).
