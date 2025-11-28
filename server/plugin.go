@@ -2,8 +2,10 @@ package main
 
 import (
 	"net/http"
+	"strings"
 	"sync/atomic"
 
+	"github.com/mattermost-bugsnag/plugin/server/api"
 	"github.com/mattermost/mattermost-server/v6/plugin"
 )
 
@@ -14,6 +16,7 @@ type Plugin struct {
 	plugin.MattermostPlugin
 
 	configuration atomic.Pointer[Configuration]
+	apiHandler    http.Handler
 }
 
 func main() {
@@ -45,6 +48,10 @@ func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Req
 		p.handleActions(w, r)
 		return
 	default:
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			p.getAPIHandler().ServeHTTP(w, r)
+			return
+		}
 		http.NotFound(w, r)
 	}
 }
@@ -56,4 +63,15 @@ func (p *Plugin) getConfiguration() Configuration {
 		return *cfg
 	}
 	return Configuration{}
+}
+
+func (p *Plugin) getAPIHandler() http.Handler {
+	if p.apiHandler == nil {
+		p.apiHandler = api.NewHandler(func() string {
+			cfg := p.getConfiguration()
+			return cfg.BugsnagAPIToken
+		})
+	}
+
+	return p.apiHandler
 }
