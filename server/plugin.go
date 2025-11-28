@@ -80,7 +80,9 @@ func (p *Plugin) restartSyncRoutine(cfg Configuration) {
 		return
 	}
 
-	p.syncRunner = scheduler.NewRunner(p.API, cfg.EnableDebugLog)
+	p.syncRunner = scheduler.NewRunner(p.API, cfg.EnableDebugLog, func() string {
+		return p.getConfiguration().BugsnagAPIToken
+	})
 	p.syncRunner.Start(interval)
 }
 
@@ -145,11 +147,40 @@ func (p *Plugin) logError(msg string, keyValuePairs ...any) {
 
 func (p *Plugin) getAPIHandler() http.Handler {
 	if p.apiHandler == nil {
-		p.apiHandler = api.NewHandler(func() string {
-			cfg := p.getConfiguration()
-			return cfg.BugsnagAPIToken
+		p.apiHandler = api.NewRouter(api.Config{
+			TokenProvider: func() string {
+				cfg := p.getConfiguration()
+				return cfg.BugsnagAPIToken
+			},
+			OrgIDProvider: func() string {
+				cfg := p.getConfiguration()
+				return cfg.OrganizationID
+			},
+			KVStore: &pluginKVAdapter{api: p.API, namespace: p.kvNS()},
 		})
 	}
 
 	return p.apiHandler
+}
+
+// pluginKVAdapter adapts plugin.API to api.KVStore interface.
+type pluginKVAdapter struct {
+	api       plugin.API
+	namespace string
+}
+
+func (a *pluginKVAdapter) Get(key string) ([]byte, error) {
+	data, appErr := a.api.KVGet(a.namespace + ":" + key)
+	if appErr != nil {
+		return nil, appErr
+	}
+	return data, nil
+}
+
+func (a *pluginKVAdapter) Set(key string, value []byte) error {
+	appErr := a.api.KVSet(a.namespace+":"+key, value)
+	if appErr != nil {
+		return appErr
+	}
+	return nil
 }

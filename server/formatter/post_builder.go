@@ -56,6 +56,42 @@ func BuildErrorPost(errorData ErrorData, mapping ErrorPostMapping, mmUserMapping
 	}
 }
 
+// UpdatePostStatus updates the status in an existing post's message and attachment.
+// Returns the updated post ready to be saved.
+func UpdatePostStatus(post *model.Post, newStatus string, mapping ErrorPostMapping, errorURL string) *model.Post {
+	// Update the message line with new status
+	message := post.Message
+	if idx := strings.Index(message, " · Status:"); idx > 0 {
+		message = message[:idx]
+	}
+	if newStatus != "" {
+		message = fmt.Sprintf("%s · Status: %s", message, newStatus)
+	}
+	post.Message = message
+
+	// Update attachment if present
+	if attachments, ok := post.Props["attachments"].([]*model.SlackAttachment); ok && len(attachments) > 0 {
+		att := attachments[0]
+		// Update status in text field
+		lines := strings.Split(att.Text, "\n")
+		for i, line := range lines {
+			if strings.HasPrefix(line, "Status:") {
+				parts := strings.Split(line, " | ")
+				parts[0] = fmt.Sprintf("Status: %s", newStatus)
+				lines[i] = strings.Join(parts, " | ")
+				break
+			}
+		}
+		att.Text = strings.Join(lines, "\n")
+
+		// Rebuild actions to keep them functional
+		att.Actions = buildActions(mapping, errorURL)
+		post.Props["attachments"] = []*model.SlackAttachment{att}
+	}
+
+	return post
+}
+
 func buildMessage(errorData ErrorData) string {
 	base := fmt.Sprintf(":rotating_light: **[BUG]** %s", strings.TrimSpace(errorData.Summary))
 	status := strings.TrimSpace(errorData.Status)

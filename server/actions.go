@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/a-voronkov/mattermost-bugsnag/server/bugsnag"
+	"github.com/a-voronkov/mattermost-bugsnag/server/formatter"
 )
 
 type actionContext struct {
@@ -66,9 +67,9 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 
 	mappingKey := errorPostKVKey(payload.Context.ProjectID, payload.Context.ErrorID)
 	var postMapping ErrorPostMapping
-	found, err := mm.LoadJSON(mappingKey, &postMapping)
-	if err != nil {
-		p.API.LogDebug("interactive action missing card mapping", "error_id", payload.Context.ErrorID, "project_id", payload.Context.ProjectID, "err", err.Error())
+	found, appErr := mm.LoadJSON(mappingKey, &postMapping)
+	if appErr != nil {
+		p.API.LogDebug("interactive action missing card mapping", "error_id", payload.Context.ErrorID, "project_id", payload.Context.ProjectID, "err", appErr.Error())
 	}
 
 	mention := fmt.Sprintf("@%s", user.Username)
@@ -89,6 +90,9 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
 
+	var newStatus string
+	var actionSuccess bool
+
 	switch action {
 	case "assign_me":
 		assignee := bugsnag.BestAssignee(bugsnag.UserMapping{
@@ -105,16 +109,19 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag assign failed: %v", err))
 			} else {
 				msgParts = append(msgParts, fmt.Sprintf("assigned to %s in Bugsnag", assignee))
+				actionSuccess = true
 			}
 		} else {
 			msgParts = append(msgParts, "Bugsnag client unavailable, assignment skipped")
 		}
 	case "resolve":
 		if bugsnagClient != nil {
-			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, payload.Context.ProjectID, payload.Context.ErrorID, "resolved"); err != nil {
+			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, payload.Context.ProjectID, payload.Context.ErrorID, "fixed"); err != nil {
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag resolve failed: %v", err))
 			} else {
-				msgParts = append(msgParts, "status set to resolved in Bugsnag")
+				msgParts = append(msgParts, "status set to fixed in Bugsnag")
+				newStatus = "fixed"
+				actionSuccess = true
 			}
 		} else {
 			msgParts = append(msgParts, "Bugsnag client unavailable, resolve skipped")
@@ -125,6 +132,8 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag ignore failed: %v", err))
 			} else {
 				msgParts = append(msgParts, "status set to ignored in Bugsnag")
+				newStatus = "ignored"
+				actionSuccess = true
 			}
 		} else {
 			msgParts = append(msgParts, "Bugsnag client unavailable, ignore skipped")
@@ -134,6 +143,21 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "unsupported action", http.StatusBadRequest)
 		return
+	}
+
+	// Update the card if action was successful and we have a status change
+	if actionSuccess && newStatus != "" && found {
+		if post, appErr := mm.GetPost(postMapping.PostID); appErr == nil {
+			mapping := formatter.ErrorPostMapping{
+				ChannelID: postMapping.ChannelID,
+				ProjectID: payload.Context.ProjectID,
+				ErrorID:   payload.Context.ErrorID,
+			}
+			updatedPost := formatter.UpdatePostStatus(post, newStatus, mapping, payload.Context.ErrorURL)
+			if _, appErr := mm.UpdatePost(updatedPost); appErr != nil {
+				mm.LogDebug("failed to update card status", "err", appErr.Error())
+			}
+		}
 	}
 
 	note := strings.Join(msgParts, " · ")

@@ -25,6 +25,14 @@ type Client struct {
 	HTTPClient *http.Client
 }
 
+// Organization represents a Bugsnag organization.
+type Organization struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// Project represents a Bugsnag project.
 type Project struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
@@ -36,6 +44,23 @@ type ErrorStatus struct {
 	ID         string `json:"id"`
 	Status     string `json:"status"`
 	AssigneeID string `json:"assignee_id,omitempty"`
+}
+
+// ErrorDetails represents detailed information about a Bugsnag error.
+type ErrorDetails struct {
+	ID            string `json:"id"`
+	ProjectID     string `json:"project_id"`
+	ErrorClass    string `json:"error_class"`
+	Message       string `json:"message"`
+	Context       string `json:"context"`
+	Status        string `json:"status"`
+	Severity      string `json:"severity"`
+	Events        int    `json:"events"`
+	EventsLast24h int    `json:"events_last_24h,omitempty"`
+	FirstSeen     string `json:"first_seen"`
+	LastSeen      string `json:"last_seen"`
+	AssigneeID    string `json:"assignee_id,omitempty"`
+	URL           string `json:"url,omitempty"`
 }
 
 // NewClient constructs a Client instance.
@@ -60,6 +85,16 @@ func NewClient(rawBaseURL, token string, httpClient *http.Client) (*Client, erro
 	return &Client{BaseURL: baseURL, Token: token, HTTPClient: httpClient}, nil
 }
 
+// GetOrganizations retrieves all organizations accessible by the current user.
+func (c *Client) GetOrganizations(ctx context.Context) ([]Organization, error) {
+	var orgs []Organization
+	if err := c.do(ctx, http.MethodGet, "/user/organizations", nil, &orgs); err != nil {
+		return nil, err
+	}
+
+	return orgs, nil
+}
+
 // GetProjects retrieves all projects for the given organization.
 func (c *Client) GetProjects(ctx context.Context, orgID string) ([]Project, error) {
 	endpoint := fmt.Sprintf("/organizations/%s/projects", url.PathEscape(orgID))
@@ -70,6 +105,18 @@ func (c *Client) GetProjects(ctx context.Context, orgID string) ([]Project, erro
 	}
 
 	return projects, nil
+}
+
+// GetError retrieves detailed information about a specific error.
+func (c *Client) GetError(ctx context.Context, projectID, errorID string) (*ErrorDetails, error) {
+	endpoint := fmt.Sprintf("/projects/%s/errors/%s", url.PathEscape(projectID), url.PathEscape(errorID))
+
+	var details ErrorDetails
+	if err := c.do(ctx, http.MethodGet, endpoint, nil, &details); err != nil {
+		return nil, err
+	}
+
+	return &details, nil
 }
 
 // UpdateErrorStatus updates a Bugsnag error status and optional assignee.

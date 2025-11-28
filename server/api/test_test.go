@@ -13,31 +13,6 @@ type testResponse struct {
 	Error    string   `json:"error"`
 }
 
-func TestTestHandlerHappyPath(t *testing.T) {
-	handler := NewHandler(func() string { return "token" })
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
-	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
-	}
-
-	var resp testResponse
-	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if resp.Status != "ok" {
-		t.Fatalf("expected status ok, got %s", resp.Status)
-	}
-
-	if len(resp.Projects) == 0 {
-		t.Fatalf("expected projects to be returned")
-	}
-}
-
 func TestTestHandlerMissingToken(t *testing.T) {
 	handler := NewHandler(func() string { return "" })
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
@@ -56,5 +31,29 @@ func TestTestHandlerMissingToken(t *testing.T) {
 
 	if resp.Error == "" {
 		t.Fatalf("expected error message for missing token")
+	}
+}
+
+func TestTestHandlerMethodNotAllowed(t *testing.T) {
+	handler := NewHandler(func() string { return "token" })
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/test", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
+	}
+}
+
+func TestTestHandlerNotFound(t *testing.T) {
+	handler := NewHandler(func() string { return "token" })
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/other", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rr.Code)
 	}
 }

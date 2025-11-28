@@ -11,26 +11,27 @@ The repository includes a working server implementation with modular packages.
 - [x] **Bugsnag API client** — `server/bugsnag/` package with GetProjects, UpdateErrorStatus, AssignError
 - [x] **Post formatter** — `server/formatter/` package for error cards with action buttons
 - [x] **Store abstraction** — `server/store/` package with KVStore interface
-- [x] **Scheduler** — `server/scheduler/` package for periodic sync
-- [x] **API endpoints** — `server/api/` package (test endpoint)
+- [x] **Scheduler** — `server/scheduler/` package for periodic sync with real Bugsnag API
+- [x] **API endpoints** — `server/api/` package with test, projects, organizations, user-mappings, channel-rules
 - [x] **Code quality cleanup** — consolidated clients, centralized constants in `kvkeys` package
+- [x] **Refresh card** — update post status after successful resolve/ignore/assign actions
 
-## In Progress
+- [x] **Webapp admin UI**
+  - [x] Connection tab — test Bugsnag API connection
+  - [x] Projects & Channels tab — project→channel mapping
+  - [x] User Mapping tab — Mattermost↔Bugsnag user mapping
+  - [x] Notification Rules tab — environment/severity/event filters
 
-- [ ] Refresh card footer/status after successful Bugsnag API calls
-- [ ] Integrate scheduler with real Bugsnag API (currently uses mock)
+- [x] **Packaging**
+  - [x] Makefile for building server binaries and webapp bundle
+  - [x] package.json and webpack.config.js for webapp
+
+- [x] **Documentation**
+  - [x] Add CONTRIBUTING.md
+  - [x] Add deployment guide
+  - [x] Add integration tests
 
 ## Pending
 
-- [ ] **Webapp admin UI**
-  - React components for Connection, Projects & Channels, User Mapping, Notification Rules tabs
-  - Expand REST endpoints in `server/api/` to serve and persist configs
-
-- [ ] **Packaging**
-  - Add `Makefile` for building server binaries and webapp bundle
-  - Ensure `plugin.json` paths align for `make plugin`
-
-- [ ] **Documentation**
-  - Add CONTRIBUTING.md
-  - Add deployment guide
-  - Add integration tests
+- [ ] **End-to-end testing** — test full flow with real Mattermost and Bugsnag instances
+- [ ] **CI/CD** — GitHub Actions for build, test, and release
