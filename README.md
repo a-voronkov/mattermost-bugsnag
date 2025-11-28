@@ -40,7 +40,9 @@ Technical specification and draft architecture for a Mattermost plugin integrate
 ## Supporting documents
 
 - Full technical description of requirements, data flows, and UI lives in [`initial-plan.md`](initial-plan.md).
-- Local Mattermost setup instructions for manual plugin testing are in [`docs/local-testing.md`](docs/local-testing.md).
+- Russian-language technical specification is available in [`docs/technical-spec-ru.md`](docs/technical-spec-ru.md).
+- Local Mattermost setup instructions for manual plugin testing are in
+  [`docs/local-testing.md`](docs/local-testing.md).
 
 ## Repository status
 
@@ -63,12 +65,8 @@ Technical specification and draft architecture for a Mattermost plugin integrate
   go test ./...
   ```
 
-- The module depends on the upstream Mattermost server packages. Fetching those dependencies requires outbound access to GitHub (or an internal GOPROXY). If downloads are blocked, tests and `go mod tidy` will fail to resolve modules.
+- The module depends on the upstream Mattermost server packages. Fetching those
+  dependencies requires outbound access to GitHub (or an internal GOPROXY). If
+  downloads are blocked, tests and `go mod tidy` will fail to resolve modules.
 
-## Progress and next steps
-
-- Server scaffold: webhook/actions endpoints, configuration validation, a lightweight Bugsnag client, and a Mattermost API wrapper are in place. Webhook and action handlers can upsert a provisional card and write thread notes but still need payload normalization and richer card fields.
-- Admin UI/webapp: not yet ported from the plugin starter template; REST endpoints for admin settings remain to be added.
-- Packaging: Makefile and webapp bundle are still missing from the starter template.
-
-See [`docs/todo.md`](docs/todo.md) for a detailed tracker of what is implemented and what remains.
+Next step: copy the Makefile and webapp from `mattermost-plugin-starter-template`, attach REST endpoints for the admin console, and implement webhook/interactive logic per `docs/todo.md`.

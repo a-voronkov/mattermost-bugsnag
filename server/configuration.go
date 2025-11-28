@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Configuration collects the server-side settings supplied via System Console.
@@ -13,6 +14,8 @@ type Configuration struct {
 	WebhookSecret   string
 	WebhookToken    string
 	EnableDebugLog  bool
+	SyncInterval    time.Duration
+	SyncIntervalSec int
 }
 
 // Clone returns a shallow copy. Useful when we start adding mutable slices/maps.
@@ -20,11 +23,15 @@ func (c *Configuration) Clone() Configuration {
 	return *c
 }
 
-// Validate returns an error when required fields are missing. The webhook token
-// validation deliberately accepts either WebhookToken or WebhookSecret to avoid
-// breaking existing deployments when the name changes.
+// Validate ensures required fields are provided and defaults are set.
+// Webhook token validation deliberately accepts either WebhookToken or
+// WebhookSecret to avoid breaking existing deployments when the name changes.
 func (c *Configuration) Validate() error {
 	missing := []string{}
+
+	if c.SyncInterval <= 0 {
+		c.SyncInterval = 5 * time.Minute
+	}
 
 	if strings.TrimSpace(c.BugsnagAPIToken) == "" {
 		missing = append(missing, "Bugsnag API Token")
@@ -32,6 +39,10 @@ func (c *Configuration) Validate() error {
 
 	if strings.TrimSpace(c.WebhookToken) == "" && strings.TrimSpace(c.WebhookSecret) == "" {
 		missing = append(missing, "Webhook Token/Secret")
+	}
+
+	if c.SyncIntervalSec <= 0 {
+		c.SyncIntervalSec = 300
 	}
 
 	if len(missing) > 0 {
