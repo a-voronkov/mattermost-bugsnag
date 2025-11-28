@@ -13,6 +13,7 @@ type Configuration struct {
 	WebhookSecret   string
 	WebhookToken    string
 	EnableDebugLog  bool
+	SyncIntervalSec int
 }
 
 // Clone returns a shallow copy. Useful when we start adding mutable slices/maps.
@@ -32,6 +33,10 @@ func (c *Configuration) Validate() error {
 
 	if strings.TrimSpace(c.WebhookToken) == "" && strings.TrimSpace(c.WebhookSecret) == "" {
 		missing = append(missing, "Webhook Token/Secret")
+	}
+
+	if c.SyncIntervalSec <= 0 {
+		c.SyncIntervalSec = 300
 	}
 
 	if len(missing) > 0 {
