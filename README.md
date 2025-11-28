@@ -40,9 +40,8 @@ Technical specification and draft architecture for a Mattermost plugin integrate
 ## Supporting documents
 
 - Full technical description of requirements, data flows, and UI lives in [`initial-plan.md`](initial-plan.md).
-- Russian-language technical specification is available in [`docs/technical-spec-ru.md`](docs/technical-spec-ru.md).
-- Local Mattermost setup instructions for manual plugin testing are in
-  [`docs/local-testing.md`](docs/local-testing.md).
+- Local Mattermost setup instructions for manual plugin testing are in [`docs/local-testing.md`](docs/local-testing.md).
+- Code review and recommendations are documented in [`docs/code-review-2025-11-28.md`](docs/code-review-2025-11-28.md).
 
 ## Repository status
 

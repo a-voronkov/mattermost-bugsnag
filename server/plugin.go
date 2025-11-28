@@ -2,15 +2,14 @@ package main
 
 import (
 	"net/http"
-	"sync"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/mattermost-bugsnag/plugin/server/api"
+	"github.com/a-voronkov/mattermost-bugsnag/server/api"
+	"github.com/a-voronkov/mattermost-bugsnag/server/scheduler"
 	"github.com/mattermost/mattermost-server/v6/plugin"
-
-	"github.com/mattermost-bugsnag/plugin/server/scheduler"
 )
 
 // Plugin implements the Mattermost plugin interface and wires HTTP endpoints for the
@@ -53,10 +52,8 @@ func (p *Plugin) OnConfigurationChange() error {
 		p.API.LogDebug("kv namespace initialized", "namespace", p.kvNamespace)
 	}
 
-	cfg := configuration.Clone()
-	p.configuration.Store(&cfg)
-	p.API.LogInfo("configuration loaded", "org_id", cfg.OrganizationID, "sync_interval", cfg.SyncInterval.String())
 	p.configuration.Store(&configuration)
+	p.API.LogInfo("configuration loaded", "org_id", configuration.OrganizationID, "sync_interval_sec", configuration.SyncIntervalSec)
 	p.restartSyncRoutine(configuration)
 	return nil
 }
@@ -102,10 +99,6 @@ func (p *Plugin) stopSyncRoutineLocked() {
 
 // ServeHTTP routes external HTTP requests to the appropriate handler.
 func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Request) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/webhook", p.handleWebhook)
-	mux.HandleFunc("/actions", p.handleActions)
-	mux.ServeHTTP(w, r)
 	switch r.URL.Path {
 	case "/webhook":
 		p.handleWebhook(w, r)

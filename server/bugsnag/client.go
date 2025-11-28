@@ -8,7 +8,15 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
+	"time"
 )
+
+// DefaultBaseURL is the standard Bugsnag API endpoint.
+const DefaultBaseURL = "https://api.bugsnag.com"
+
+// DefaultTimeout is the default HTTP timeout for Bugsnag API requests.
+const DefaultTimeout = 10 * time.Second
 
 // Client wraps authenticated access to the Bugsnag REST API.
 type Client struct {
@@ -83,6 +91,36 @@ func (c *Client) UpdateErrorStatus(ctx context.Context, errorID, status, assigne
 	return &result, nil
 }
 
+// UpdateProjectErrorStatus changes the error status (e.g., "open", "fixed", "ignored")
+// using the project-scoped endpoint.
+func (c *Client) UpdateProjectErrorStatus(ctx context.Context, projectID, errorID, status string) error {
+	if status == "" {
+		return fmt.Errorf("status is required")
+	}
+
+	payload := map[string]string{
+		"status": status,
+	}
+
+	endpoint := fmt.Sprintf("/projects/%s/errors/%s", url.PathEscape(projectID), url.PathEscape(errorID))
+	return c.do(ctx, http.MethodPatch, endpoint, payload, nil)
+}
+
+// AssignError assigns a Bugsnag error to a user. The assignee can be either
+// a user ID or email depending on the installation settings.
+func (c *Client) AssignError(ctx context.Context, projectID, errorID, assignee string) error {
+	if assignee == "" {
+		return fmt.Errorf("assignee is required")
+	}
+
+	payload := map[string]string{
+		"assignee_id": assignee,
+	}
+
+	endpoint := fmt.Sprintf("/projects/%s/errors/%s/assignee", url.PathEscape(projectID), url.PathEscape(errorID))
+	return c.do(ctx, http.MethodPut, endpoint, payload, nil)
+}
+
 func (c *Client) do(ctx context.Context, method, endpoint string, body any, out any) error {
 	if c == nil {
 		return fmt.Errorf("client is nil")
@@ -132,4 +170,24 @@ func (c *Client) do(ctx context.Context, method, endpoint string, body any, out 
 	}
 
 	return nil
+}
+
+// NewDefaultClient creates a client with the default Bugsnag API URL and timeout.
+func NewDefaultClient(token string) (*Client, error) {
+	return NewClient(DefaultBaseURL, token, &http.Client{Timeout: DefaultTimeout})
+}
+
+// UserMapping connects a Mattermost user to a Bugsnag user record.
+type UserMapping struct {
+	BugsnagUserID string
+	BugsnagEmail  string
+}
+
+// BestAssignee returns the most precise Bugsnag identity to use for assignment.
+// It prefers explicit Bugsnag user ID, falling back to email.
+func BestAssignee(mapping UserMapping) string {
+	if id := strings.TrimSpace(mapping.BugsnagUserID); id != "" {
+		return id
+	}
+	return strings.TrimSpace(mapping.BugsnagEmail)
 }

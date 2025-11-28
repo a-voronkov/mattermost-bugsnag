@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/a-voronkov/mattermost-bugsnag/server/bugsnag"
 )
 
 type actionContext struct {
@@ -44,7 +46,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 	cfg := p.getConfiguration()
 	mm := newMMClient(p.API, cfg.EnableDebugLog, p.kvNS())
 
-	bugsnagClient, err := newBugsnagClient(cfg)
+	bugsnagClient, err := bugsnag.NewDefaultClient(cfg.BugsnagAPIToken)
 	if err != nil {
 		mm.LogDebug("bugsnag client init failed", "err", err.Error())
 	}
@@ -89,14 +91,17 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 
 	switch action {
 	case "assign_me":
-		assignee := bestAssignee(bugsnagUser)
+		assignee := bugsnag.BestAssignee(bugsnag.UserMapping{
+			BugsnagUserID: bugsnagUser.BugsnagUserID,
+			BugsnagEmail:  bugsnagUser.BugsnagEmail,
+		})
 		if assignee == "" {
 			msgParts = append(msgParts, "no Bugsnag mapping available for assignment")
 			break
 		}
 
 		if bugsnagClient != nil {
-			if err := bugsnagClient.assignError(ctx, payload.Context.ProjectID, payload.Context.ErrorID, assignee); err != nil {
+			if err := bugsnagClient.AssignError(ctx, payload.Context.ProjectID, payload.Context.ErrorID, assignee); err != nil {
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag assign failed: %v", err))
 			} else {
 				msgParts = append(msgParts, fmt.Sprintf("assigned to %s in Bugsnag", assignee))
@@ -106,7 +111,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		}
 	case "resolve":
 		if bugsnagClient != nil {
-			if err := bugsnagClient.updateErrorStatus(ctx, payload.Context.ProjectID, payload.Context.ErrorID, "resolved"); err != nil {
+			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, payload.Context.ProjectID, payload.Context.ErrorID, "resolved"); err != nil {
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag resolve failed: %v", err))
 			} else {
 				msgParts = append(msgParts, "status set to resolved in Bugsnag")
@@ -116,7 +121,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		}
 	case "ignore":
 		if bugsnagClient != nil {
-			if err := bugsnagClient.updateErrorStatus(ctx, payload.Context.ProjectID, payload.Context.ErrorID, "ignored"); err != nil {
+			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, payload.Context.ProjectID, payload.Context.ErrorID, "ignored"); err != nil {
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag ignore failed: %v", err))
 			} else {
 				msgParts = append(msgParts, "status set to ignored in Bugsnag")

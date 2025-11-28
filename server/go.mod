@@ -1,4 +1,4 @@
-module github.com/mattermost-bugsnag/plugin/server
+module github.com/a-voronkov/mattermost-bugsnag/server
 
 go 1.21
 

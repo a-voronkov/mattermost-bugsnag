@@ -4,11 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-)
 
-const (
-	projectChannelMappingsKey = "bugsnag:project-channel-mappings"
-	activeErrorsKey           = "bugsnag:active-errors"
+	"github.com/a-voronkov/mattermost-bugsnag/server/kvkeys"
 )
 
 // ProjectChannelMapping links a Bugsnag error to the Mattermost post and channel
@@ -119,7 +116,7 @@ func (s *Store) ListActiveErrors() ([]ActiveError, error) {
 }
 
 func (s *Store) loadProjectChannelMappings() ([]ProjectChannelMapping, error) {
-	data, err := s.kv.Get(projectChannelMappingsKey)
+	data, err := s.kv.Get(kvkeys.ProjectChannelMappings)
 	if err != nil {
 		return nil, fmt.Errorf("get project channel mappings: %w", err)
 	}
@@ -142,7 +139,7 @@ func (s *Store) saveProjectChannelMappings(mappings []ProjectChannelMapping) err
 		return fmt.Errorf("encode project channel mappings: %w", err)
 	}
 
-	if err := s.kv.Set(projectChannelMappingsKey, data); err != nil {
+	if err := s.kv.Set(kvkeys.ProjectChannelMappings, data); err != nil {
 		return fmt.Errorf("set project channel mappings: %w", err)
 	}
 
@@ -150,7 +147,7 @@ func (s *Store) saveProjectChannelMappings(mappings []ProjectChannelMapping) err
 }
 
 func (s *Store) loadActiveErrors() ([]ActiveError, error) {
-	data, err := s.kv.Get(activeErrorsKey)
+	data, err := s.kv.Get(kvkeys.ActiveErrors)
 	if err != nil {
 		return nil, fmt.Errorf("get active errors: %w", err)
 	}
@@ -173,7 +170,7 @@ func (s *Store) saveActiveErrors(activeErrors []ActiveError) error {
 		return fmt.Errorf("encode active errors: %w", err)
 	}
 
-	if err := s.kv.Set(activeErrorsKey, data); err != nil {
+	if err := s.kv.Set(kvkeys.ActiveErrors, data); err != nil {
 		return fmt.Errorf("set active errors: %w", err)
 	}
 

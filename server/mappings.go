@@ -7,11 +7,6 @@ import (
 	"github.com/mattermost/mattermost-server/v6/model"
 )
 
-const (
-	kvProjectChannelMapKey = "bugsnag:project-channel-mappings"
-	kvUserMappingsKey      = "bugsnag:user-mappings"
-)
-
 // ChannelRule describes where to send a Bugsnag event for a given project, and
 // what filters must match before posting.
 type ChannelRule struct {
@@ -47,7 +42,7 @@ type UserMapping struct {
 // admin UI will be responsible for writing this structure.
 func loadUserMappings(mm *MMClient) ([]UserMapping, error) {
 	var mappings []UserMapping
-	found, appErr := mm.LoadJSON(kvUserMappingsKey, &mappings)
+	found, appErr := mm.LoadJSON(KVKeyUserMappings, &mappings)
 	if appErr != nil {
 		return nil, fmt.Errorf("load user mappings: %w", appErr)
 	}
@@ -60,7 +55,7 @@ func loadUserMappings(mm *MMClient) ([]UserMapping, error) {
 
 func loadProjectChannelMappings(mm *MMClient) (ProjectChannelMappings, error) {
 	var mappings ProjectChannelMappings
-	found, appErr := mm.LoadJSON(kvProjectChannelMapKey, &mappings)
+	found, appErr := mm.LoadJSON(KVKeyProjectChannelMappings, &mappings)
 	if appErr != nil {
 		return nil, fmt.Errorf("load project/channel mappings: %w", appErr)
 	}
@@ -97,7 +92,7 @@ func containsValue(values []string, candidate string) bool {
 }
 
 func errorPostKVKey(projectID, errorID string) string {
-	return fmt.Sprintf("bugsnag:error-post:%s:%s", projectID, errorID)
+	return fmt.Sprintf("%s%s:%s", KVKeyErrorPostPrefix, projectID, errorID)
 }
 
 // mapUserToBugsnag resolves a Mattermost user to a Bugsnag user based on the

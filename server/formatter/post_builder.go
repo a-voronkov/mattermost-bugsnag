@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/a-voronkov/mattermost-bugsnag/server/kvkeys"
 	"github.com/mattermost/mattermost-server/v6/model"
 )
-
-const pluginID = "com.mattermost.bugsnag"
 
 // Counts mirrors the aggregate counts provided by Bugsnag for an error.
 type Counts struct {
@@ -112,7 +111,7 @@ func buildAttachment(errorData ErrorData, mapping ErrorPostMapping, mmUserMappin
 }
 
 func buildActions(mapping ErrorPostMapping, errorURL string) []*model.PostAction {
-	actionURL := fmt.Sprintf("/plugins/%s/actions", pluginID)
+	actionURL := fmt.Sprintf("/plugins/%s/actions", kvkeys.PluginID)
 
 	actions := []*model.PostAction{
 		{

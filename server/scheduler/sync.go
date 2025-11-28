@@ -7,11 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/a-voronkov/mattermost-bugsnag/server/kvkeys"
 	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/mattermost/mattermost-server/v6/plugin"
 )
-
-const kvActiveErrorsKey = "bugsnag:active-errors"
 
 // ActiveError tracks a Bugsnag error that should be refreshed periodically.
 type ActiveError struct {
@@ -142,7 +141,7 @@ func (r *Runner) tick() {
 }
 
 func loadActiveErrors(api plugin.API) ([]ActiveError, error) {
-	data, appErr := api.KVGet(kvActiveErrorsKey)
+	data, appErr := api.KVGet(kvkeys.ActiveErrors)
 	if appErr != nil {
 		return nil, fmt.Errorf("load active errors: %w", appErr)
 	}

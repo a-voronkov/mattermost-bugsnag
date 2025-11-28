@@ -1,46 +1,36 @@
-# Implementation TODOs for the first workable build
+# Implementation TODOs
 
-The repository now includes a thin server skeleton and manifest. These steps
-should lead to a buildable plugin that can be uploaded to Mattermost.
+The repository includes a working server implementation with modular packages.
 
-## Progress tracker
+## Completed
 
-- [x] Wire Mattermost client helpers
-  - Implemented `MMClient` wrapper to create posts (with attachments), read channels/users, and store/load JSON from KV with
-    optional debug logging.
-  - Next: add opinionated helpers for thread updates and richer post updates.
+- [x] **Mattermost client helpers** — `MMClient` wrapper for posts, KV, users, channels
+- [x] **Configuration and validation** — API token, webhook secret, project/channel/user mappings in KV
+- [x] **Webhook handler** — token validation, project→channel routing with filters, error→post mapping
+- [x] **Interactive actions** — user mapping, thread notes, Bugsnag API calls for assign/resolve/ignore
+- [x] **Bugsnag API client** — `server/bugsnag/` package with GetProjects, UpdateErrorStatus, AssignError
+- [x] **Post formatter** — `server/formatter/` package for error cards with action buttons
+- [x] **Store abstraction** — `server/store/` package with KVStore interface
+- [x] **Scheduler** — `server/scheduler/` package for periodic sync
+- [x] **API endpoints** — `server/api/` package (test endpoint)
+- [x] **Code quality cleanup** — consolidated clients, centralized constants in `kvkeys` package
 
-- [x] Configuration and validation
-  - Implemented validation for `BugsnagAPIToken` and webhook secret/token and surfaced errors via `OnConfigurationChange`.
-  - Remaining: persist project/channel mappings and user mappings in KV.
+## In Progress
 
-- [ ] Webhook handler
-  - Added validation for webhook token/secret from query/header.
-  - Implemented project→channel mapping storage (KV), rule-based filtering (environment/severity/event type), and error→post
-    mapping so repeated webhooks update the same card with a thread note about the event.
-  - Optional `channel_id` query override remains for provisional posting while admin UI endpoints are still pending.
-  - Remaining: normalize Bugsnag payloads, enrich card copy/fields, and plug in real project/channel mappings from the admin UI
-    API.
+- [ ] Refresh card footer/status after successful Bugsnag API calls
+- [ ] Integrate scheduler with real Bugsnag API (currently uses mock)
 
-- [ ] Interactive actions
-  - Implemented: resolve Mattermost user → Bugsnag user mapping (KV + email fallback), log action context, write a thread note
-    on the linked card, and call Bugsnag API endpoints for assignment and status changes (resolve/ignore) with timeouts.
-  - Remaining: refresh the card footer/status after successful Bugsnag calls and align status values with the final
-    admin-configurable mapping.
+## Pending
 
-- [ ] Scheduler
-  - Pending: track active errors in KV and poll Bugsnag on an interval for spikes, last seen, and counts over 1h/24h; update
-    posts accordingly.
+- [ ] **Webapp admin UI**
+  - React components for Connection, Projects & Channels, User Mapping, Notification Rules tabs
+  - Expand REST endpoints in `server/api/` to serve and persist configs
 
-- [ ] Webapp admin UI
-  - Pending: repurpose starter-template tabs for Connection, Projects & Channels, User Mapping, and Notification Rules, plus
-    REST endpoints to serve and persist these configs.
+- [ ] **Packaging**
+  - Add `Makefile` for building server binaries and webapp bundle
+  - Ensure `plugin.json` paths align for `make plugin`
 
-- [ ] Packaging
-  - Pending: mirror the starter-template `Makefile` to build `server/dist` binaries and `webapp/dist/main.js` bundle; ensure
-    `plugin.json` paths align for `make plugin`.
-
-## Upcoming cleanup and documentation
-
-- Remove superseded specification drafts to keep a single source of truth (now consolidated in `initial-plan.md`).
-- Add a CONTRIBUTING.md once build/package scripts land.
+- [ ] **Documentation**
+  - Add CONTRIBUTING.md
+  - Add deployment guide
+  - Add integration tests
