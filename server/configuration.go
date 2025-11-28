@@ -1,0 +1,42 @@
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Configuration collects the server-side settings supplied via System Console.
+// These fields intentionally mirror the "settings_schema" keys in plugin.json.
+type Configuration struct {
+	BugsnagAPIToken string
+	OrganizationID  string
+	WebhookSecret   string
+	WebhookToken    string
+	EnableDebugLog  bool
+}
+
+// Clone returns a shallow copy. Useful when we start adding mutable slices/maps.
+func (c *Configuration) Clone() Configuration {
+	return *c
+}
+
+// Validate returns an error when required fields are missing. The webhook token
+// validation deliberately accepts either WebhookToken or WebhookSecret to avoid
+// breaking existing deployments when the name changes.
+func (c *Configuration) Validate() error {
+	missing := []string{}
+
+	if strings.TrimSpace(c.BugsnagAPIToken) == "" {
+		missing = append(missing, "Bugsnag API Token")
+	}
+
+	if strings.TrimSpace(c.WebhookToken) == "" && strings.TrimSpace(c.WebhookSecret) == "" {
+		missing = append(missing, "Webhook Token/Secret")
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required configuration: %s", strings.Join(missing, ", "))
+	}
+
+	return nil
+}
