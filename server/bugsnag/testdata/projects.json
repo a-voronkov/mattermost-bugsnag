@@ -1,0 +1,12 @@
+[
+  {
+    "id": "project-1",
+    "name": "Backend",
+    "organization_id": "org-123"
+  },
+  {
+    "id": "project-2",
+    "name": "Frontend",
+    "organization_id": "org-123"
+  }
+]
