@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/mattermost/mattermost-server/v6/plugin"
@@ -10,12 +11,13 @@ import (
 // MMClient wraps the plugin.API with small, typed helpers so the plugin code can
 // evolve without scattering low-level API calls everywhere.
 type MMClient struct {
-	api   plugin.API
-	debug bool
+	api         plugin.API
+	debug       bool
+	kvNamespace string
 }
 
-func newMMClient(api plugin.API, debug bool) *MMClient {
-	return &MMClient{api: api, debug: debug}
+func newMMClient(api plugin.API, debug bool, namespace string) *MMClient {
+	return &MMClient{api: api, debug: debug, kvNamespace: namespace}
 }
 
 func (c *MMClient) CreatePost(channelID, message string, attachments []*model.SlackAttachment) (*model.Post, *model.AppError) {
@@ -55,11 +57,11 @@ func (c *MMClient) StoreJSON(key string, value any) *model.AppError {
 		return model.NewAppError("KVSet", "app.plugin.json_marshal.app_error", nil, err.Error(), 0)
 	}
 
-	return c.api.KVSet(key, data)
+	return c.api.KVSet(c.namespaced(key), data)
 }
 
 func (c *MMClient) LoadJSON(key string, dest any) (bool, *model.AppError) {
-	data, appErr := c.api.KVGet(key)
+	data, appErr := c.api.KVGet(c.namespaced(key))
 	if appErr != nil {
 		return false, appErr
 	}
@@ -79,4 +81,11 @@ func (c *MMClient) LogDebug(msg string, keyValuePairs ...interface{}) {
 	if c.debug {
 		c.api.LogDebug(msg, keyValuePairs...)
 	}
+}
+
+func (c *MMClient) namespaced(key string) string {
+	if strings.TrimSpace(c.kvNamespace) == "" {
+		return key
+	}
+	return c.kvNamespace + ":" + key
 }
