@@ -2,7 +2,10 @@ module github.com/a-voronkov/mattermost-bugsnag/server
 
 go 1.22
 
-require github.com/mattermost/mattermost/server/public v0.1.9
+require (
+	github.com/mattermost/mattermost/server/public v0.1.9
+	github.com/stretchr/testify v1.9.0
+)
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
@@ -35,7 +38,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/tinylib/msgp v1.2.0 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
