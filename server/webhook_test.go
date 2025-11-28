@@ -75,10 +75,9 @@ func TestHandleWebhookValidToken(t *testing.T) {
 	p.configuration.Store(&Configuration{WebhookToken: "secret-token"})
 
 	payload := webhookPayload{
-		Event:     "error",
-		ErrorID:   "err-123",
-		ProjectID: "proj-1",
-		Summary:   "Test error",
+		Trigger: triggerInfo{Type: "error"},
+		Error:   &errorInfo{ID: "err-123", ExceptionClass: "Test error"},
+		Project: &projectInfo{ID: "proj-1"},
 	}
 	body, _ := json.Marshal(payload)
 
@@ -121,10 +120,9 @@ func TestHandleWebhookWithChannelID(t *testing.T) {
 	p.configuration.Store(&Configuration{})
 
 	payload := webhookPayload{
-		Event:     "error",
-		ErrorID:   "err-123",
-		ProjectID: "proj-1",
-		Summary:   "Test error",
+		Trigger: triggerInfo{Type: "error"},
+		Error:   &errorInfo{ErrorID: "err-123", ExceptionClass: "Test error"},
+		Project: &projectInfo{ID: "proj-1"},
 	}
 	body, _ := json.Marshal(payload)
 
@@ -209,17 +207,27 @@ func TestBuildCardTitle(t *testing.T) {
 		want    string
 	}{
 		{
-			name:    "with summary",
-			payload: webhookPayload{Summary: "NullReferenceException"},
-			want:    ":rotating_light: **[BUG]** NullReferenceException",
+			name:    "with exception class only",
+			payload: webhookPayload{Error: &errorInfo{ExceptionClass: "NullReferenceException"}},
+			want:    ":rotating_light: **NullReferenceException**",
 		},
 		{
-			name:    "no summary, has error_id",
-			payload: webhookPayload{ErrorID: "err-123"},
-			want:    ":rotating_light: **[BUG]** err-123",
+			name:    "with exception class and message",
+			payload: webhookPayload{Error: &errorInfo{ExceptionClass: "NullReferenceException", Message: "Object reference not set"}},
+			want:    ":rotating_light: **NullReferenceException**: Object reference not set",
 		},
 		{
-			name:    "no summary, no error_id",
+			name:    "message only",
+			payload: webhookPayload{Error: &errorInfo{Message: "Something went wrong"}},
+			want:    ":rotating_light: Something went wrong",
+		},
+		{
+			name:    "trigger message fallback",
+			payload: webhookPayload{Trigger: triggerInfo{Message: "New error"}},
+			want:    ":rotating_light: New error",
+		},
+		{
+			name:    "empty payload",
 			payload: webhookPayload{},
 			want:    ":rotating_light: Bugsnag error",
 		},

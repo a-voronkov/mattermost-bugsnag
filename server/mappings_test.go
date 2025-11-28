@@ -6,6 +6,17 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
+// helper to build webhookPayload for tests
+func makePayload(env, severity, event string) webhookPayload {
+	return webhookPayload{
+		Trigger: triggerInfo{Type: event},
+		Error: &errorInfo{
+			Severity: severity,
+			App:      &appInfo{ReleaseStage: env},
+		},
+	}
+}
+
 func TestMatchesRule(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -16,61 +27,61 @@ func TestMatchesRule(t *testing.T) {
 		{
 			name:    "empty rule matches any payload",
 			rule:    ChannelRule{},
-			payload: webhookPayload{Environment: "production", Severity: "error", Event: "error"},
+			payload: makePayload("production", "error", "error"),
 			want:    true,
 		},
 		{
 			name:    "environment filter matches",
 			rule:    ChannelRule{Environments: []string{"production"}},
-			payload: webhookPayload{Environment: "production"},
+			payload: makePayload("production", "", ""),
 			want:    true,
 		},
 		{
 			name:    "environment filter does not match",
 			rule:    ChannelRule{Environments: []string{"production"}},
-			payload: webhookPayload{Environment: "staging"},
+			payload: makePayload("staging", "", ""),
 			want:    false,
 		},
 		{
 			name:    "severity filter matches",
 			rule:    ChannelRule{Severities: []string{"error", "warning"}},
-			payload: webhookPayload{Severity: "error"},
+			payload: makePayload("", "error", ""),
 			want:    true,
 		},
 		{
 			name:    "severity filter does not match",
 			rule:    ChannelRule{Severities: []string{"error"}},
-			payload: webhookPayload{Severity: "info"},
+			payload: makePayload("", "info", ""),
 			want:    false,
 		},
 		{
 			name:    "event filter matches",
 			rule:    ChannelRule{Events: []string{"error", "spike"}},
-			payload: webhookPayload{Event: "spike"},
+			payload: makePayload("", "", "spike"),
 			want:    true,
 		},
 		{
 			name:    "event filter does not match",
 			rule:    ChannelRule{Events: []string{"error"}},
-			payload: webhookPayload{Event: "spike"},
+			payload: makePayload("", "", "spike"),
 			want:    false,
 		},
 		{
 			name:    "multiple filters all match",
 			rule:    ChannelRule{Environments: []string{"production"}, Severities: []string{"error"}, Events: []string{"error"}},
-			payload: webhookPayload{Environment: "production", Severity: "error", Event: "error"},
+			payload: makePayload("production", "error", "error"),
 			want:    true,
 		},
 		{
 			name:    "multiple filters one fails",
 			rule:    ChannelRule{Environments: []string{"production"}, Severities: []string{"error"}},
-			payload: webhookPayload{Environment: "staging", Severity: "error"},
+			payload: makePayload("staging", "error", ""),
 			want:    false,
 		},
 		{
 			name:    "case insensitive matching",
 			rule:    ChannelRule{Environments: []string{"Production"}},
-			payload: webhookPayload{Environment: "production"},
+			payload: makePayload("production", "", ""),
 			want:    true,
 		},
 	}
@@ -177,4 +188,3 @@ func TestContainsValue(t *testing.T) {
 		}
 	}
 }
-
