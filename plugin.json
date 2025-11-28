@@ -1,0 +1,57 @@
+{
+  "id": "com.mattermost.bugsnag",
+  "name": "Bugsnag Integration",
+  "description": "Receive Bugsnag alerts in Mattermost and act on them with interactive buttons.",
+  "version": "0.0.1",
+  "min_server_version": "9.6.0",
+  "server": {
+    "executables": {
+      "linux-amd64": "server/dist/plugin-linux-amd64",
+      "darwin-amd64": "server/dist/plugin-darwin-amd64",
+      "darwin-arm64": "server/dist/plugin-darwin-arm64",
+      "windows-amd64": "server/dist/plugin-windows-amd64.exe"
+    }
+  },
+  "webapp": {
+    "bundle_path": "webapp/dist/main.js"
+  },
+  "settings_schema": {
+    "settings": [
+      {
+        "key": "BugsnagAPIToken",
+        "display_name": "Bugsnag API Token",
+        "type": "text",
+        "help_text": "Personal API token used to query Bugsnag projects and errors.",
+        "placeholder": "<your-api-token>"
+      },
+      {
+        "key": "OrganizationID",
+        "display_name": "Organization ID (optional)",
+        "type": "text",
+        "help_text": "Limit API requests to a single Bugsnag organization.",
+        "placeholder": "org_12345"
+      },
+      {
+        "key": "WebhookSecret",
+        "display_name": "Webhook Secret",
+        "type": "text",
+        "help_text": "Shared secret required on webhook requests.",
+        "placeholder": "random-shared-secret"
+      },
+      {
+        "key": "WebhookToken",
+        "display_name": "Webhook Token (query)",
+        "type": "text",
+        "help_text": "Optional query token appended to the webhook URL for easy validation.",
+        "placeholder": "token-value"
+      },
+      {
+        "key": "EnableDebugLog",
+        "display_name": "Enable debug logging",
+        "type": "bool",
+        "help_text": "When true, the plugin logs verbose request details for troubleshooting.",
+        "default": false
+      }
+    ]
+  }
+}
