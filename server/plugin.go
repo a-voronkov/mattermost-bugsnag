@@ -14,6 +14,7 @@ type Plugin struct {
 	plugin.MattermostPlugin
 
 	configuration atomic.Pointer[Configuration]
+	kvNamespace   string
 }
 
 func main() {
@@ -24,29 +25,32 @@ func main() {
 func (p *Plugin) OnConfigurationChange() error {
 	var configuration Configuration
 	if err := p.API.LoadPluginConfiguration(&configuration); err != nil {
+		p.API.LogError("failed to load configuration", "err", err.Error())
 		return err
 	}
 
 	if err := configuration.Validate(); err != nil {
+		p.API.LogWarn("invalid configuration", "err", err.Error())
 		return err
 	}
 
-	p.configuration.Store(&configuration)
+	if p.kvNamespace == "" {
+		p.kvNamespace = pluginID
+		p.API.LogDebug("kv namespace initialized", "namespace", p.kvNamespace)
+	}
+
+	cfg := configuration.Clone()
+	p.configuration.Store(&cfg)
+	p.API.LogInfo("configuration loaded", "org_id", cfg.OrganizationID, "sync_interval", cfg.SyncInterval.String())
 	return nil
 }
 
 // ServeHTTP routes external HTTP requests to the appropriate handler.
 func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Request) {
-	switch r.URL.Path {
-	case "/webhook":
-		p.handleWebhook(w, r)
-		return
-	case "/actions":
-		p.handleActions(w, r)
-		return
-	default:
-		http.NotFound(w, r)
-	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/webhook", p.handleWebhook)
+	mux.HandleFunc("/actions", p.handleActions)
+	mux.ServeHTTP(w, r)
 }
 
 // getConfiguration returns the active configuration or a zero-value configuration
@@ -56,4 +60,23 @@ func (p *Plugin) getConfiguration() Configuration {
 		return *cfg
 	}
 	return Configuration{}
+}
+
+func (p *Plugin) kvNS() string {
+	if p.kvNamespace == "" {
+		return pluginID
+	}
+	return p.kvNamespace
+}
+
+func (p *Plugin) logDebug(msg string, keyValuePairs ...any) {
+	p.API.LogDebug(msg, keyValuePairs...)
+}
+
+func (p *Plugin) logWarn(msg string, keyValuePairs ...any) {
+	p.API.LogWarn(msg, keyValuePairs...)
+}
+
+func (p *Plugin) logError(msg string, keyValuePairs ...any) {
+	p.API.LogError(msg, keyValuePairs...)
 }

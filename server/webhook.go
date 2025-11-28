@@ -31,14 +31,21 @@ type payloadCounts struct {
 }
 
 func (p *Plugin) handleWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	cfg := p.getConfiguration()
 	if err := validateWebhookToken(cfg, r); err != nil {
-		p.API.LogWarn("webhook rejected", "err", err.Error())
+		p.API.LogWarn("webhook rejected", "err", err.Error(), "remote", r.RemoteAddr)
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	mm := newMMClient(p.API, cfg.EnableDebugLog)
+	p.API.LogInfo("received webhook", "remote", r.RemoteAddr)
+
+	mm := newMMClient(p.API, cfg.EnableDebugLog, p.kvNS())
 
 	var payload webhookPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {

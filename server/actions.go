@@ -22,11 +22,18 @@ type interactiveAction struct {
 }
 
 func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var payload interactiveAction
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "invalid interactive action payload", http.StatusBadRequest)
 		return
 	}
+
+	p.API.LogInfo("received interactive action", "user_id", payload.UserID, "action", payload.Context.Action)
 
 	action := strings.TrimSpace(payload.Context.Action)
 	if action == "" {
@@ -35,7 +42,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := p.getConfiguration()
-	mm := newMMClient(p.API, cfg.EnableDebugLog)
+	mm := newMMClient(p.API, cfg.EnableDebugLog, p.kvNS())
 
 	bugsnagClient, err := newBugsnagClient(cfg)
 	if err != nil {
