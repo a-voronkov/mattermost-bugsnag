@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/a-voronkov/mattermost-bugsnag/server/kvkeys"
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 // Counts mirrors the aggregate counts provided by Bugsnag for an error.

@@ -3,7 +3,7 @@ package formatter
 import (
 	"testing"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 func TestBuildErrorPost(t *testing.T) {

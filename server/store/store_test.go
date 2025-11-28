@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/a-voronkov/mattermost-bugsnag/server/kvkeys"
 )
 
 type memoryKVStore struct {
@@ -158,7 +160,7 @@ func TestStoreSerializationIsolation(t *testing.T) {
 		t.Fatalf("save mapping: %v", err)
 	}
 
-	raw := kv.data[projectChannelMappingsKey]
+	raw := kv.data[kvkeys.ProjectChannelMappings]
 	if len(raw) == 0 {
 		t.Fatalf("expected data to be stored")
 	}

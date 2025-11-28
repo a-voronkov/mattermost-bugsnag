@@ -9,7 +9,7 @@ import (
 
 	"github.com/a-voronkov/mattermost-bugsnag/server/api"
 	"github.com/a-voronkov/mattermost-bugsnag/server/scheduler"
-	"github.com/mattermost/mattermost-server/v6/plugin"
+	"github.com/mattermost/mattermost/server/public/plugin"
 )
 
 // Plugin implements the Mattermost plugin interface and wires HTTP endpoints for the

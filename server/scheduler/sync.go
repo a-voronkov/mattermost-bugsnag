@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/a-voronkov/mattermost-bugsnag/server/kvkeys"
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/plugin"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
 )
 
 // ActiveError tracks a Bugsnag error that should be refreshed periodically.
