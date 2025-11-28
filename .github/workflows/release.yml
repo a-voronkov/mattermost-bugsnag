@@ -8,10 +8,12 @@ on:
 permissions:
   contents: write
 
+env:
+  PLUGIN_ID: com.mattermost.bugsnag
+
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,7 +21,43 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
+          cache-dependency-path: server/go.sum
+
+      - name: Run tests
+        run: make test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            ext: .exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
           cache-dependency-path: server/go.sum
 
       - name: Setup Node.js
@@ -33,68 +71,68 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Update plugin version
+      - name: Build server binary
         run: |
-          sed -i 's/"version": ".*"/"version": "${{ steps.version.outputs.VERSION }}"/' plugin.json
-          sed -i 's/PLUGIN_VERSION := .*/PLUGIN_VERSION := ${{ steps.version.outputs.VERSION }}/' Makefile
-
-      - name: Build server binaries
-        run: make server
+          cd server
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o plugin-${{ matrix.suffix }}${{ matrix.ext }} .
 
       - name: Build webapp
-        run: make webapp
+        run: |
+          cd webapp
+          npm install
+          npm run build
 
       - name: Create plugin bundle
-        run: make bundle
+        run: |
+          mkdir -p dist/${{ env.PLUGIN_ID }}/server/dist
+          mkdir -p dist/${{ env.PLUGIN_ID }}/webapp/dist
 
-      - name: Create ZIP archive
+          # Update version in plugin.json
+          sed -i 's/"version": ".*"/"version": "${{ steps.version.outputs.VERSION }}"/' plugin.json
+
+          cp plugin.json dist/${{ env.PLUGIN_ID }}/
+          cp server/plugin-${{ matrix.suffix }}${{ matrix.ext }} dist/${{ env.PLUGIN_ID }}/server/dist/plugin-${{ matrix.suffix }}${{ matrix.ext }}
+          cp webapp/dist/main.js dist/${{ env.PLUGIN_ID }}/webapp/dist/
+
+      - name: Create tar.gz
         run: |
           cd dist
-          zip -r com.mattermost.bugsnag-${{ steps.version.outputs.VERSION }}.zip com.mattermost.bugsnag
+          tar -czvf ${{ env.PLUGIN_ID }}-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}.tar.gz ${{ env.PLUGIN_ID }}
 
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: plugin-bundle
-          path: |
-            *.tar.gz
-            dist/*.zip
+          name: plugin-${{ matrix.suffix }}
+          path: dist/*.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: plugin-*
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: v${{ steps.version.outputs.VERSION }}
           draft: false
           prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
           generate_release_notes: true
-          files: |
-            *.tar.gz
-            dist/*.zip
+          files: artifacts/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  test:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
-          cache-dependency-path: server/go.sum
-
-      - name: Run tests
-        run: make test
-
-      - name: Run tests with coverage
-        run: make test-coverage
-
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: server/coverage.html
-
