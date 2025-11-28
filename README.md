@@ -40,6 +40,9 @@ Technical specification and draft architecture for a Mattermost plugin integrate
 ## Supporting documents
 
 - Full technical description of requirements, data flows, and UI lives in [`initial-plan.md`](initial-plan.md).
+- Russian-language technical specification is available in [`docs/technical-spec-ru.md`](docs/technical-spec-ru.md).
+- Local Mattermost setup instructions for manual plugin testing are in
+  [`docs/local-testing.md`](docs/local-testing.md).
 
 ## Repository status
 
@@ -58,5 +61,18 @@ Technical specification and draft architecture for a Mattermost plugin integrate
     with optional debug logging.
 - `plugin.json` defines the plugin manifest, admin settings, and expected build artifacts.
 - `docs/` holds sample payloads and the TODO checklist for turning the scaffold into a working build.
+
+## Development and testing
+
+- Go module files live under `server/`. Run Go commands from that directory:
+
+  ```bash
+  cd server
+  go test ./...
+  ```
+
+- The module depends on the upstream Mattermost server packages. Fetching those
+  dependencies requires outbound access to GitHub (or an internal GOPROXY). If
+  downloads are blocked, tests and `go mod tidy` will fail to resolve modules.
 
 Next step: copy the Makefile and webapp from `mattermost-plugin-starter-template`, attach REST endpoints for the admin console, and implement webhook/interactive logic per `docs/todo.md`.
