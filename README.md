@@ -48,17 +48,11 @@ Technical specification and draft architecture for a Mattermost plugin integrate
 
 - Minimal server plugin scaffold in Go (`server/`):
   - `plugin.go` registers `/webhook` and `/actions` via `ServeHTTP` and loads configuration.
-  - `webhook.go` validates tokens, applies project→channel mapping rules (with
-    filters for environment/severity/event), stores error→post mappings, and can
-    render a provisional card when `channel_id` is supplied in the webhook query.
-  - `actions.go` accepts payloads, maps Mattermost users to Bugsnag users (KV +
-    email fallback), records action notes in the corresponding error thread, and
-    invokes the Bugsnag API client for assignment and status updates.
-  - `bugsnag_client.go` is a focused HTTP client for status and assignment
-    updates with API token auth.
+  - `webhook.go` validates tokens, applies project→channel mapping rules (with filters for environment/severity/event), stores error→post mappings, and can render a provisional card when `channel_id` is supplied in the webhook query.
+  - `actions.go` accepts payloads, maps Mattermost users to Bugsnag users (KV + email fallback), records action notes in the corresponding error thread, and invokes the Bugsnag API client for assignment and status updates.
+  - `bugsnag_client.go` is a focused HTTP client for status and assignment updates with API token auth.
   - `message_templates.go` contains draft card/action structures.
-  - `mm_client.go` wraps Mattermost API calls for posts, KV JSON, users, and channels
-    with optional debug logging.
+  - `mm_client.go` wraps Mattermost API calls for posts, KV JSON, users, and channels with optional debug logging.
 - `plugin.json` defines the plugin manifest, admin settings, and expected build artifacts.
 - `docs/` holds sample payloads and the TODO checklist for turning the scaffold into a working build.
 
