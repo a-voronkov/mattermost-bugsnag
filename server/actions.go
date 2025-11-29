@@ -117,20 +117,24 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		}
 	case "resolve":
 		if bugsnagClient != nil {
-			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, projectID, errorID, "fixed"); err != nil {
+			p.API.LogInfo("calling Bugsnag API with operation=fix", "project_id", projectID, "error_id", errorID)
+			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, projectID, errorID, "fix"); err != nil {
+				p.API.LogError("Bugsnag resolve failed", "err", err.Error(), "project_id", projectID, "error_id", errorID)
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag resolve failed: %v", err))
 			} else {
+				p.API.LogInfo("Bugsnag status updated to fixed", "project_id", projectID, "error_id", errorID)
 				msgParts = append(msgParts, "status set to fixed in Bugsnag")
 				newStatus = "fixed"
 				actionSuccess = true
 			}
 		} else {
+			p.API.LogWarn("Bugsnag client unavailable, resolve skipped")
 			msgParts = append(msgParts, "Bugsnag client unavailable, resolve skipped")
 		}
 	case "ignore":
 		if bugsnagClient != nil {
-			p.API.LogInfo("calling Bugsnag API to set status to ignored", "project_id", projectID, "error_id", errorID)
-			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, projectID, errorID, "ignored"); err != nil {
+			p.API.LogInfo("calling Bugsnag API with operation=ignore", "project_id", projectID, "error_id", errorID)
+			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, projectID, errorID, "ignore"); err != nil {
 				p.API.LogError("Bugsnag ignore failed", "err", err.Error(), "project_id", projectID, "error_id", errorID)
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag ignore failed: %v", err))
 			} else {

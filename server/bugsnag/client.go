@@ -158,15 +158,15 @@ func (c *Client) UpdateErrorStatus(ctx context.Context, errorID, status, assigne
 	return &result, nil
 }
 
-// UpdateProjectErrorStatus changes the error status (e.g., "open", "fixed", "ignored")
-// using the project-scoped endpoint.
-func (c *Client) UpdateProjectErrorStatus(ctx context.Context, projectID, errorID, status string) error {
-	if status == "" {
-		return fmt.Errorf("status is required")
+// UpdateProjectErrorStatus changes the error status using the project-scoped endpoint.
+// Valid operations are: "open", "fix", "ignore", "snooze", "unsnooze"
+func (c *Client) UpdateProjectErrorStatus(ctx context.Context, projectID, errorID, operation string) error {
+	if operation == "" {
+		return fmt.Errorf("operation is required")
 	}
 
 	payload := map[string]string{
-		"status": status,
+		"operation": operation,
 	}
 
 	endpoint := fmt.Sprintf("/projects/%s/errors/%s", url.PathEscape(projectID), url.PathEscape(errorID))
