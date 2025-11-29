@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -226,7 +227,9 @@ func (c *Client) do(ctx context.Context, method, endpoint string, body any, out 
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return fmt.Errorf("bugsnag API returned status %d", resp.StatusCode)
+		// Read response body to understand the error
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("bugsnag API returned status %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	if out != nil {
