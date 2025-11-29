@@ -227,7 +227,7 @@ func BuildActions(params BuildActionsParams) []*model.PostAction {
 	resolveDisabled := params.CurrentStatus == "fixed"
 	actions = append(actions, &model.PostAction{
 		Id:       "resolve",
-		Name:     "Resolve",
+		Name:     "✓ Resolve",
 		Style:    "primary",
 		Type:     model.PostActionTypeButton,
 		Disabled: resolveDisabled,
@@ -245,7 +245,7 @@ func BuildActions(params BuildActionsParams) []*model.PostAction {
 	ignoreDisabled := params.CurrentStatus == "ignored"
 	actions = append(actions, &model.PostAction{
 		Id:       "ignore",
-		Name:     "Ignore",
+		Name:     "✕ Ignore",
 		Style:    "default",
 		Type:     model.PostActionTypeButton,
 		Disabled: ignoreDisabled,
