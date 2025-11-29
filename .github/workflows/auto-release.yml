@@ -6,9 +6,14 @@ on:
       - main
     paths:
       - 'plugin.json'
+      - 'server/**'
+      - 'webapp/**'
 
 permissions:
   contents: write
+
+env:
+  PLUGIN_ID: com.mattermost.bugsnag
 
 jobs:
   check-version:
@@ -25,11 +30,9 @@ jobs:
       - name: Check if version changed and needs release
         id: check
         run: |
-          # Get version from plugin.json
           VERSION=$(jq -r '.version' plugin.json)
           echo "Current version: $VERSION"
-          
-          # Check if tag already exists
+
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
             echo "Tag v$VERSION already exists, skipping release"
             echo "should_release=false" >> $GITHUB_OUTPUT
@@ -39,7 +42,7 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           fi
 
-  create-tag:
+  build-and-release:
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
@@ -47,10 +50,65 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create and push tag
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: server/go.sum
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: webapp/package-lock.json
+
+      - name: Run tests
+        run: cd server && go test ./...
+
+      - name: Build server binaries
         run: |
+          cd server
+          GOOS=linux GOARCH=amd64 go build -o dist/plugin-linux-amd64 .
+          GOOS=linux GOARCH=arm64 go build -o dist/plugin-linux-arm64 .
+          GOOS=darwin GOARCH=amd64 go build -o dist/plugin-darwin-amd64 .
+          GOOS=darwin GOARCH=arm64 go build -o dist/plugin-darwin-arm64 .
+          GOOS=windows GOARCH=amd64 go build -o dist/plugin-windows-amd64.exe .
+
+      - name: Build webapp
+        run: |
+          cd webapp
+          npm install
+          npm run build
+
+      - name: Create plugin bundle
+        run: |
+          VERSION=${{ needs.check-version.outputs.version }}
+          mkdir -p dist/${{ env.PLUGIN_ID }}/server/dist
+          mkdir -p dist/${{ env.PLUGIN_ID }}/webapp/dist
+
+          cp plugin.json dist/${{ env.PLUGIN_ID }}/
+          cp server/dist/* dist/${{ env.PLUGIN_ID }}/server/dist/
+          cp webapp/dist/main.js dist/${{ env.PLUGIN_ID }}/webapp/dist/
+
+          cd dist
+          tar -czvf ${{ env.PLUGIN_ID }}-${VERSION}.tar.gz ${{ env.PLUGIN_ID }}
+
+      - name: Create tag
+        run: |
+          VERSION=${{ needs.check-version.outputs.version }}
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ needs.check-version.outputs.version }}" -m "Release v${{ needs.check-version.outputs.version }}"
-          git push origin "v${{ needs.check-version.outputs.version }}"
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"
 
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check-version.outputs.version }}
+          name: v${{ needs.check-version.outputs.version }}
+          draft: false
+          generate_release_notes: true
+          files: dist/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
