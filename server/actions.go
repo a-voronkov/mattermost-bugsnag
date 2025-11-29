@@ -92,6 +92,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 	var newStatus string
 	var assignedUsername string
 	var actionSuccess bool
+	var replyMessage string // Human-readable message for thread reply
 
 	switch action {
 	case "assign_me":
@@ -102,6 +103,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		if assignee == "" {
 			p.API.LogWarn("no Bugsnag mapping available for assignment", "user_id", payload.UserId, "username", user.Username)
 			msgParts = append(msgParts, "no Bugsnag mapping available for assignment")
+			replyMessage = fmt.Sprintf("@%s tried to assign this error but has no Bugsnag user mapping configured.", user.Username)
 			break
 		}
 
@@ -110,15 +112,18 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 			if err := bugsnagClient.AssignError(ctx, projectID, errorID, assignee); err != nil {
 				p.API.LogError("Bugsnag assign failed", "err", err.Error(), "project_id", projectID, "error_id", errorID, "assignee", assignee)
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag assign failed: %v", err))
+				replyMessage = fmt.Sprintf("@%s tried to assign this error but failed: %v", user.Username, err)
 			} else {
 				p.API.LogInfo("Bugsnag error assigned", "project_id", projectID, "error_id", errorID, "assignee", assignee)
 				msgParts = append(msgParts, fmt.Sprintf("assigned to %s in Bugsnag", assignee))
 				assignedUsername = user.Username
 				actionSuccess = true
+				replyMessage = fmt.Sprintf("@%s assigned this error to themselves.", user.Username)
 			}
 		} else {
 			p.API.LogWarn("Bugsnag client unavailable, assignment skipped")
 			msgParts = append(msgParts, "Bugsnag client unavailable, assignment skipped")
+			replyMessage = fmt.Sprintf("@%s tried to assign this error but Bugsnag API is not configured.", user.Username)
 		}
 	case "resolve":
 		if bugsnagClient != nil {
@@ -126,15 +131,18 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, projectID, errorID, "fix"); err != nil {
 				p.API.LogError("Bugsnag resolve failed", "err", err.Error(), "project_id", projectID, "error_id", errorID)
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag resolve failed: %v", err))
+				replyMessage = fmt.Sprintf("@%s tried to resolve this error but failed: %v", user.Username, err)
 			} else {
 				p.API.LogInfo("Bugsnag status updated to fixed", "project_id", projectID, "error_id", errorID)
 				msgParts = append(msgParts, "status set to fixed in Bugsnag")
 				newStatus = "fixed"
 				actionSuccess = true
+				replyMessage = fmt.Sprintf("@%s marked this error as **resolved**.", user.Username)
 			}
 		} else {
 			p.API.LogWarn("Bugsnag client unavailable, resolve skipped")
 			msgParts = append(msgParts, "Bugsnag client unavailable, resolve skipped")
+			replyMessage = fmt.Sprintf("@%s tried to resolve this error but Bugsnag API is not configured.", user.Username)
 		}
 	case "ignore":
 		if bugsnagClient != nil {
@@ -142,15 +150,18 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, projectID, errorID, "ignore"); err != nil {
 				p.API.LogError("Bugsnag ignore failed", "err", err.Error(), "project_id", projectID, "error_id", errorID)
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag ignore failed: %v", err))
+				replyMessage = fmt.Sprintf("@%s tried to ignore this error but failed: %v", user.Username, err)
 			} else {
 				p.API.LogInfo("Bugsnag status updated to ignored", "project_id", projectID, "error_id", errorID)
 				msgParts = append(msgParts, "status set to ignored in Bugsnag")
 				newStatus = "ignored"
 				actionSuccess = true
+				replyMessage = fmt.Sprintf("@%s marked this error as **ignored**.", user.Username)
 			}
 		} else {
 			p.API.LogWarn("Bugsnag client unavailable, ignore skipped")
 			msgParts = append(msgParts, "Bugsnag client unavailable, ignore skipped")
+			replyMessage = fmt.Sprintf("@%s tried to ignore this error but Bugsnag API is not configured.", user.Username)
 		}
 	case "open_in_browser":
 		// Return response that tells the client to open the URL
@@ -195,8 +206,9 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 
 	p.API.LogInfo("action completed", "action", action, "success", actionSuccess, "response", note)
 
-	if found {
-		if _, appErr := mm.CreateReply(postMapping.ChannelID, postMapping.PostID, note); appErr != nil {
+	// Post human-readable reply in thread
+	if found && replyMessage != "" {
+		if _, appErr := mm.CreateReply(postMapping.ChannelID, postMapping.PostID, replyMessage); appErr != nil {
 			p.API.LogError("failed to record interactive action reply", "err", appErr.Error())
 		}
 	}
@@ -204,6 +216,6 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"text": note,
+		"text": replyMessage,
 	})
 }
