@@ -73,8 +73,9 @@ func TestBuildErrorPost(t *testing.T) {
 		t.Errorf("unexpected footer: %s", attachment.Footer)
 	}
 
-	if len(attachment.Actions) != 4 {
-		t.Fatalf("expected 4 actions, got %d", len(attachment.Actions))
+	// 3 actions: Assign to me, Resolve, Ignore (no "Open in Bugsnag" button - it's a TitleLink)
+	if len(attachment.Actions) != 3 {
+		t.Fatalf("expected 3 actions, got %d", len(attachment.Actions))
 	}
 
 	firstAction := attachment.Actions[0]
@@ -85,10 +86,5 @@ func TestBuildErrorPost(t *testing.T) {
 	context := firstAction.Integration.Context
 	if context["error_id"] != mapping.ErrorID || context["project_id"] != mapping.ProjectID {
 		t.Errorf("unexpected context: %+v", context)
-	}
-
-	lastAction := attachment.Actions[3]
-	if lastAction.Id != "open" || lastAction.Integration.Context["error_url"] != errorData.ErrorURL {
-		t.Errorf("unexpected open action: %+v", lastAction)
 	}
 }

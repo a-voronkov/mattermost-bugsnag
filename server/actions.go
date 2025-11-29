@@ -200,19 +200,6 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 			msgParts = append(msgParts, "Bugsnag client unavailable, unignore skipped")
 			replyMessage = fmt.Sprintf("@%s tried to unignore this error but Bugsnag API is not configured.", user.Username)
 		}
-	case "open_in_browser":
-		// Return response that tells the client to open the URL
-		if errorURL != "" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"type":            "ok",
-				"open_in_browser": errorURL,
-			})
-			return
-		}
-		http.Error(w, "no URL available", http.StatusBadRequest)
-		return
 	default:
 		http.Error(w, "unsupported action", http.StatusBadRequest)
 		return

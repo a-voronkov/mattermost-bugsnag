@@ -470,21 +470,7 @@ func buildCardAttachment(payload webhookPayload, cfg Configuration, userMappings
 		},
 	}
 
-	if errorURL != "" {
-		actions = append(actions, &model.PostAction{
-			Id:    "open",
-			Name:  "Open in Bugsnag",
-			Style: "link",
-			Type:  model.PostActionTypeButton,
-			Integration: &model.PostActionIntegration{
-				URL: actionURL,
-				Context: map[string]any{
-					"action":    "open_in_browser",
-					"error_url": errorURL,
-				},
-			},
-		})
-	}
+	// Note: "Open in Bugsnag" link is available via TitleLink on the attachment title
 
 	// Set color based on severity
 	color := "#4949E4" // Bugsnag purple default

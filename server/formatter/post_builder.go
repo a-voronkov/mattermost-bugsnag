@@ -365,21 +365,7 @@ func BuildActions(params BuildActionsParams) []*model.PostAction {
 		})
 	}
 
-	if strings.TrimSpace(params.ErrorURL) != "" {
-		actions = append(actions, &model.PostAction{
-			Id:    "open",
-			Name:  "Open in Bugsnag",
-			Style: "link",
-			Type:  model.PostActionTypeButton,
-			Integration: &model.PostActionIntegration{
-				URL: actionURL,
-				Context: map[string]any{
-					"action":    "open_in_browser",
-					"error_url": params.ErrorURL,
-				},
-			},
-		})
-	}
+	// Note: "Open in Bugsnag" link is available via TitleLink on the attachment title
 
 	return actions
 }
