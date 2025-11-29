@@ -81,8 +81,8 @@ func UpdatePost(params UpdatePostParams) *model.Post {
 	post.Message = message
 
 	// Update attachment if present
-	if attachments, ok := post.Props["attachments"].([]*model.SlackAttachment); ok && len(attachments) > 0 {
-		att := attachments[0]
+	att := extractFirstAttachment(post)
+	if att != nil {
 		// Update status in text field
 		lines := strings.Split(att.Text, "\n")
 		for i, line := range lines {
@@ -95,6 +95,14 @@ func UpdatePost(params UpdatePostParams) *model.Post {
 		}
 		att.Text = strings.Join(lines, "\n")
 
+		// Update status in Fields
+		for i, field := range att.Fields {
+			if field.Title == "Status" {
+				att.Fields[i].Value = params.NewStatus
+				break
+			}
+		}
+
 		// Rebuild actions with current status for proper button states
 		att.Actions = BuildActions(BuildActionsParams{
 			Mapping:        params.Mapping,
@@ -106,6 +114,80 @@ func UpdatePost(params UpdatePostParams) *model.Post {
 	}
 
 	return post
+}
+
+// extractFirstAttachment extracts the first SlackAttachment from post Props.
+// Handles both []*model.SlackAttachment (in-memory) and []interface{} (from DB).
+func extractFirstAttachment(post *model.Post) *model.SlackAttachment {
+	if post.Props == nil {
+		return nil
+	}
+
+	attachments := post.Props["attachments"]
+	if attachments == nil {
+		return nil
+	}
+
+	// Try direct type assertion first (in-memory posts)
+	if slackAttachments, ok := attachments.([]*model.SlackAttachment); ok && len(slackAttachments) > 0 {
+		return slackAttachments[0]
+	}
+
+	// Handle []interface{} from JSON deserialization (posts loaded from DB)
+	if arr, ok := attachments.([]interface{}); ok && len(arr) > 0 {
+		if m, ok := arr[0].(map[string]interface{}); ok {
+			return mapToSlackAttachment(m)
+		}
+	}
+
+	// Handle []map[string]interface{}
+	if arr, ok := attachments.([]map[string]interface{}); ok && len(arr) > 0 {
+		return mapToSlackAttachment(arr[0])
+	}
+
+	return nil
+}
+
+// mapToSlackAttachment converts a map to SlackAttachment.
+func mapToSlackAttachment(m map[string]interface{}) *model.SlackAttachment {
+	att := &model.SlackAttachment{}
+
+	if v, ok := m["title"].(string); ok {
+		att.Title = v
+	}
+	if v, ok := m["title_link"].(string); ok {
+		att.TitleLink = v
+	}
+	if v, ok := m["text"].(string); ok {
+		att.Text = v
+	}
+	if v, ok := m["footer"].(string); ok {
+		att.Footer = v
+	}
+	if v, ok := m["color"].(string); ok {
+		att.Color = v
+	}
+
+	// Extract fields
+	if fields, ok := m["fields"].([]interface{}); ok {
+		for _, f := range fields {
+			if fm, ok := f.(map[string]interface{}); ok {
+				field := &model.SlackAttachmentField{}
+				if v, ok := fm["title"].(string); ok {
+					field.Title = v
+				}
+				if v, ok := fm["value"]; ok {
+					field.Value = v
+				}
+				if v, ok := fm["short"].(bool); ok {
+					field.Short = model.SlackCompatibleBool(v)
+				}
+				att.Fields = append(att.Fields, field)
+			}
+		}
+	}
+
+	return att
 }
 
 // UpdatePostStatus updates the status in an existing post's message and attachment.

@@ -2,7 +2,7 @@
   "id": "com.mattermost.bugsnag",
   "name": "Bugsnag Integration",
   "description": "Receive Bugsnag alerts in Mattermost and act on them with interactive buttons.",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "min_server_version": "9.6.0",
   "server": {
     "executables": {
