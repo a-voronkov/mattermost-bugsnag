@@ -10,19 +10,8 @@ import (
 
 	"github.com/a-voronkov/mattermost-bugsnag/server/bugsnag"
 	"github.com/a-voronkov/mattermost-bugsnag/server/formatter"
+	"github.com/mattermost/mattermost/server/public/model"
 )
-
-type actionContext struct {
-	Action    string `json:"action"`
-	ErrorID   string `json:"error_id"`
-	ProjectID string `json:"project_id"`
-	ErrorURL  string `json:"error_url,omitempty"`
-}
-
-type interactiveAction struct {
-	UserID  string        `json:"user_id"`
-	Context actionContext `json:"context"`
-}
 
 func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -30,15 +19,22 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var payload interactiveAction
+	var payload model.PostActionIntegrationRequest
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		p.API.LogError("failed to decode action payload", "err", err.Error())
 		http.Error(w, "invalid interactive action payload", http.StatusBadRequest)
 		return
 	}
 
-	p.API.LogInfo("received interactive action", "user_id", payload.UserID, "action", payload.Context.Action)
+	// Extract values from context
+	action, _ := payload.Context["action"].(string)
+	errorID, _ := payload.Context["error_id"].(string)
+	projectID, _ := payload.Context["project_id"].(string)
+	errorURL, _ := payload.Context["error_url"].(string)
 
-	action := strings.TrimSpace(payload.Context.Action)
+	p.API.LogInfo("received interactive action", "user_id", payload.UserId, "action", action, "error_id", errorID, "project_id", projectID)
+
+	action = strings.TrimSpace(action)
 	if action == "" {
 		http.Error(w, "missing action", http.StatusBadRequest)
 		return
@@ -52,7 +48,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		mm.LogDebug("bugsnag client init failed", "err", err.Error())
 	}
 
-	user, appErr := mm.GetUser(payload.UserID)
+	user, appErr := mm.GetUser(payload.UserId)
 	if appErr != nil {
 		http.Error(w, "invalid user", http.StatusBadRequest)
 		return
@@ -65,11 +61,11 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 
 	bugsnagUser, mapped := mapUserToBugsnag(mappings, user)
 
-	mappingKey := errorPostKVKey(payload.Context.ProjectID, payload.Context.ErrorID)
+	mappingKey := errorPostKVKey(projectID, errorID)
 	var postMapping ErrorPostMapping
 	found, appErr := mm.LoadJSON(mappingKey, &postMapping)
 	if appErr != nil {
-		p.API.LogDebug("interactive action missing card mapping", "error_id", payload.Context.ErrorID, "project_id", payload.Context.ProjectID, "err", appErr.Error())
+		p.API.LogDebug("interactive action missing card mapping", "error_id", errorID, "project_id", projectID, "err", appErr.Error())
 	}
 
 	mention := fmt.Sprintf("@%s", user.Username)
@@ -83,8 +79,8 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 			msgParts = append(msgParts, fmt.Sprintf("mapped to Bugsnag user %s", bugsnagIdentity))
 		}
 	}
-	if payload.Context.ErrorURL != "" {
-		msgParts = append(msgParts, fmt.Sprintf("source: %s", payload.Context.ErrorURL))
+	if errorURL != "" {
+		msgParts = append(msgParts, fmt.Sprintf("source: %s", errorURL))
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
@@ -106,7 +102,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if bugsnagClient != nil {
-			if err := bugsnagClient.AssignError(ctx, payload.Context.ProjectID, payload.Context.ErrorID, assignee); err != nil {
+			if err := bugsnagClient.AssignError(ctx, projectID, errorID, assignee); err != nil {
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag assign failed: %v", err))
 			} else {
 				msgParts = append(msgParts, fmt.Sprintf("assigned to %s in Bugsnag", assignee))
@@ -118,7 +114,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		}
 	case "resolve":
 		if bugsnagClient != nil {
-			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, payload.Context.ProjectID, payload.Context.ErrorID, "fixed"); err != nil {
+			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, projectID, errorID, "fixed"); err != nil {
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag resolve failed: %v", err))
 			} else {
 				msgParts = append(msgParts, "status set to fixed in Bugsnag")
@@ -130,7 +126,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		}
 	case "ignore":
 		if bugsnagClient != nil {
-			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, payload.Context.ProjectID, payload.Context.ErrorID, "ignored"); err != nil {
+			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, projectID, errorID, "ignored"); err != nil {
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag ignore failed: %v", err))
 			} else {
 				msgParts = append(msgParts, "status set to ignored in Bugsnag")
@@ -142,12 +138,12 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		}
 	case "open_in_browser":
 		// Return response that tells the client to open the URL
-		if payload.Context.ErrorURL != "" {
+		if errorURL != "" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"type":            "ok",
-				"open_in_browser": payload.Context.ErrorURL,
+				"open_in_browser": errorURL,
 			})
 			return
 		}
@@ -163,14 +159,14 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		if post, appErr := mm.GetPost(postMapping.PostID); appErr == nil {
 			mapping := formatter.ErrorPostMapping{
 				ChannelID: postMapping.ChannelID,
-				ProjectID: payload.Context.ProjectID,
-				ErrorID:   payload.Context.ErrorID,
+				ProjectID: projectID,
+				ErrorID:   errorID,
 			}
 			updatedPost := formatter.UpdatePost(formatter.UpdatePostParams{
 				Post:             post,
 				NewStatus:        newStatus,
 				Mapping:          mapping,
-				ErrorURL:         payload.Context.ErrorURL,
+				ErrorURL:         errorURL,
 				AssignedUsername: assignedUsername,
 			})
 			if _, appErr := mm.UpdatePost(updatedPost); appErr != nil {
