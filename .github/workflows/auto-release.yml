@@ -81,18 +81,36 @@ jobs:
           npm install
           npm run build
 
-      - name: Create plugin bundle
+      - name: Create platform-specific bundles
         run: |
           VERSION=${{ needs.check-version.outputs.version }}
-          mkdir -p dist/${{ env.PLUGIN_ID }}/server/dist
-          mkdir -p dist/${{ env.PLUGIN_ID }}/webapp/dist
+          PLUGIN_ID=${{ env.PLUGIN_ID }}
 
-          cp plugin.json dist/${{ env.PLUGIN_ID }}/
-          cp server/dist/* dist/${{ env.PLUGIN_ID }}/server/dist/
-          cp webapp/dist/main.js dist/${{ env.PLUGIN_ID }}/webapp/dist/
+          # Create bundle for each platform
+          for PLATFORM in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64; do
+            echo "Creating bundle for $PLATFORM..."
 
-          cd dist
-          tar -czvf ${{ env.PLUGIN_ID }}-${VERSION}.tar.gz ${{ env.PLUGIN_ID }}
+            BUNDLE_DIR="dist/${PLUGIN_ID}-${PLATFORM}"
+            mkdir -p "${BUNDLE_DIR}/server/dist"
+            mkdir -p "${BUNDLE_DIR}/webapp/dist"
+
+            cp plugin.json "${BUNDLE_DIR}/"
+            cp webapp/dist/main.js "${BUNDLE_DIR}/webapp/dist/"
+
+            # Copy platform-specific binary
+            if [[ "$PLATFORM" == "windows-amd64" ]]; then
+              cp "server/dist/plugin-${PLATFORM}.exe" "${BUNDLE_DIR}/server/dist/"
+            else
+              cp "server/dist/plugin-${PLATFORM}" "${BUNDLE_DIR}/server/dist/"
+            fi
+
+            # Create tar.gz
+            cd dist
+            tar -czvf "${PLUGIN_ID}-${VERSION}-${PLATFORM}.tar.gz" "${PLUGIN_ID}-${PLATFORM}"
+            cd ..
+          done
+
+          ls -la dist/*.tar.gz
 
       - name: Create tag
         run: |
