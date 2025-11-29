@@ -65,20 +65,10 @@ type UpdatePostParams struct {
 	AssignedUsername string // Mattermost username (without @)
 }
 
-// UpdatePost updates the status and/or assignment in an existing post's message and attachment.
+// UpdatePost updates the status and/or assignment in an existing post's attachment.
 // Returns the updated post ready to be saved.
 func UpdatePost(params UpdatePostParams) *model.Post {
 	post := params.Post
-
-	// Update the message line with new status
-	message := post.Message
-	if idx := strings.Index(message, " · Status:"); idx > 0 {
-		message = message[:idx]
-	}
-	if params.NewStatus != "" {
-		message = fmt.Sprintf("%s · Status: %s", message, params.NewStatus)
-	}
-	post.Message = message
 
 	// Update attachment if present
 	att := extractFirstAttachment(post)

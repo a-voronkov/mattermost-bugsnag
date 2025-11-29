@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/a-voronkov/mattermost-bugsnag/server/store"
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
@@ -616,6 +618,20 @@ func (p *Plugin) upsertErrorCard(mm *MMClient, channelID string, payload webhook
 				mm.LogDebug("failed to add stacktrace reply", "err", appErr.Error())
 			}
 		}
+	}
+
+	// Register error for periodic sync
+	kvStore := &pluginKVAdapter{api: p.API, namespace: p.kvNS()}
+	s := store.New(kvStore)
+	activeErr := store.ActiveError{
+		ErrorID:      errorID,
+		ProjectID:    projectID,
+		PostID:       post.Id,
+		ChannelID:    channelID,
+		LastSyncedAt: time.Now().UTC(),
+	}
+	if err := s.UpsertActiveError(activeErr); err != nil {
+		mm.LogDebug("failed to register active error for sync", "err", err.Error())
 	}
 
 	return nil

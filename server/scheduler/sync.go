@@ -40,17 +40,19 @@ type Runner struct {
 	debug         bool
 	client        BugsnagClient
 	tokenProvider func() string
+	namespace     string
 	stop          chan struct{}
 	done          chan struct{}
 	interval      time.Duration
 }
 
 // NewRunner builds a scheduler runner backed by the plugin API.
-func NewRunner(api plugin.API, debug bool, tokenProvider func() string) *Runner {
+func NewRunner(api plugin.API, debug bool, tokenProvider func() string, namespace string) *Runner {
 	return &Runner{
 		api:           api,
 		debug:         debug,
 		tokenProvider: tokenProvider,
+		namespace:     namespace,
 	}
 }
 
@@ -106,7 +108,7 @@ func (r *Runner) tick() {
 		return
 	}
 
-	activeErrors, err := loadActiveErrors(r.api)
+	activeErrors, err := r.loadActiveErrors()
 	if err != nil {
 		r.logDebug("failed to load active errors", "err", err.Error())
 		return
@@ -177,8 +179,9 @@ func (r *Runner) fetchErrorSnapshot(ctx context.Context, projectID, errorID stri
 	}, nil
 }
 
-func loadActiveErrors(api plugin.API) ([]ActiveError, error) {
-	data, appErr := api.KVGet(kvkeys.ActiveErrors)
+func (r *Runner) loadActiveErrors() ([]ActiveError, error) {
+	key := r.namespaced(kvkeys.ActiveErrors)
+	data, appErr := r.api.KVGet(key)
 	if appErr != nil {
 		return nil, fmt.Errorf("load active errors: %w", appErr)
 	}
@@ -192,6 +195,13 @@ func loadActiveErrors(api plugin.API) ([]ActiveError, error) {
 	}
 
 	return active, nil
+}
+
+func (r *Runner) namespaced(key string) string {
+	if strings.TrimSpace(r.namespace) == "" {
+		return key
+	}
+	return r.namespace + ":" + key
 }
 
 func (r *Runner) logDebug(msg string, keyValuePairs ...interface{}) {

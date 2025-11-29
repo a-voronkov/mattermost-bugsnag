@@ -230,7 +230,7 @@ func (p *Plugin) restartSyncRoutine(cfg Configuration) {
 
 	p.syncRunner = scheduler.NewRunner(p.API, cfg.EnableDebugLog, func() string {
 		return p.getConfiguration().BugsnagAPIToken
-	})
+	}, p.kvNS())
 	p.syncRunner.Start(interval)
 }
 

@@ -112,6 +112,9 @@ func TestHandleWebhookWithChannelID(t *testing.T) {
 	api.On("KVGet", pluginID+":"+KVKeyErrorPostPrefix+"proj-1:err-123").Return(nil, nil)
 	api.On("CreatePost", mock.AnythingOfType("*model.Post")).Return(&model.Post{Id: postID, ChannelId: channelID}, nil)
 	api.On("KVSet", pluginID+":"+KVKeyErrorPostPrefix+"proj-1:err-123", mock.Anything).Return(nil)
+	// ActiveErrors for sync scheduler
+	api.On("KVGet", pluginID+":"+KVKeyActiveErrors).Return(nil, nil)
+	api.On("KVSet", pluginID+":"+KVKeyActiveErrors, mock.Anything).Return(nil)
 	api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
 
 	p := &Plugin{}
