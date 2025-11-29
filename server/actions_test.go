@@ -70,6 +70,8 @@ func TestHandleActionsInvalidUser(t *testing.T) {
 	api := &plugintest.API{}
 	api.On("LogInfo", "received interactive action", "user_id", "unknown-user", "action", "resolve", "error_id", "err-123", "project_id", "proj-1").Return()
 	api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	api.On("LogError", mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	api.On("LogWarn", mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
 	api.On("KVGet", mock.Anything).Return(nil, nil).Maybe()
 	api.On("GetUser", "unknown-user").Return(nil, model.NewAppError("GetUser", "user not found", nil, "", http.StatusNotFound))
 
@@ -102,9 +104,11 @@ func TestHandleActionsResolveNoClient(t *testing.T) {
 	userID := "user-123"
 
 	api := &plugintest.API{}
-	api.On("LogInfo", "received interactive action", "user_id", userID, "action", "resolve", "error_id", "err-123", "project_id", "proj-1").Return()
+	api.On("LogInfo", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
 	api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
 	api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	api.On("LogError", mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	api.On("LogWarn", mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
 	// Return empty array for user mappings
 	api.On("KVGet", pluginID+":"+KVKeyUserMappings).Return([]byte("[]"), (*model.AppError)(nil)).Maybe()
 	// Return nil for error post mapping (not found)
@@ -149,8 +153,10 @@ func TestHandleActionsUnsupportedAction(t *testing.T) {
 	userID := "user-123"
 
 	api := &plugintest.API{}
-	api.On("LogInfo", "received interactive action", "user_id", userID, "action", "unknown_action", "error_id", "", "project_id", "").Return()
+	api.On("LogInfo", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
 	api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	api.On("LogError", mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	api.On("LogWarn", mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
 	api.On("GetUser", userID).Return(&model.User{Id: userID, Username: "testuser"}, nil)
 	api.On("KVGet", mock.Anything).Return(nil, nil).Maybe()
 

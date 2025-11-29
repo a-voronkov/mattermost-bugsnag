@@ -45,7 +45,10 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 
 	bugsnagClient, err := bugsnag.NewDefaultClient(cfg.BugsnagAPIToken)
 	if err != nil {
-		mm.LogDebug("bugsnag client init failed", "err", err.Error())
+		p.API.LogError("bugsnag client init failed", "err", err.Error())
+	}
+	if bugsnagClient == nil {
+		p.API.LogWarn("bugsnag client is nil, API token may be missing or invalid", "token_length", len(cfg.BugsnagAPIToken))
 	}
 
 	user, appErr := mm.GetUser(payload.UserId)
@@ -126,14 +129,18 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 		}
 	case "ignore":
 		if bugsnagClient != nil {
+			p.API.LogInfo("calling Bugsnag API to set status to ignored", "project_id", projectID, "error_id", errorID)
 			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, projectID, errorID, "ignored"); err != nil {
+				p.API.LogError("Bugsnag ignore failed", "err", err.Error(), "project_id", projectID, "error_id", errorID)
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag ignore failed: %v", err))
 			} else {
+				p.API.LogInfo("Bugsnag status updated to ignored", "project_id", projectID, "error_id", errorID)
 				msgParts = append(msgParts, "status set to ignored in Bugsnag")
 				newStatus = "ignored"
 				actionSuccess = true
 			}
 		} else {
+			p.API.LogWarn("Bugsnag client unavailable, ignore skipped")
 			msgParts = append(msgParts, "Bugsnag client unavailable, ignore skipped")
 		}
 	case "open_in_browser":
@@ -177,9 +184,11 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 
 	note := strings.Join(msgParts, " · ")
 
+	p.API.LogInfo("action completed", "action", action, "success", actionSuccess, "response", note)
+
 	if found {
 		if _, appErr := mm.CreateReply(postMapping.ChannelID, postMapping.PostID, note); appErr != nil {
-			mm.LogDebug("failed to record interactive action", "err", appErr.Error())
+			p.API.LogError("failed to record interactive action reply", "err", appErr.Error())
 		}
 	}
 
