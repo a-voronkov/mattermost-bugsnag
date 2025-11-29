@@ -309,27 +309,45 @@ func BuildActions(params BuildActionsParams) []*model.PostAction {
 				"action":     "resolve",
 				"error_id":   params.Mapping.ErrorID,
 				"project_id": params.Mapping.ProjectID,
+				"error_url":  params.ErrorURL,
 			},
 		},
 	})
 
-	// Ignore button - disable if status is already "ignored"
-	ignoreDisabled := params.CurrentStatus == "ignored"
-	actions = append(actions, &model.PostAction{
-		Id:       "ignore",
-		Name:     "✕ Ignore",
-		Style:    "default",
-		Type:     model.PostActionTypeButton,
-		Disabled: ignoreDisabled,
-		Integration: &model.PostActionIntegration{
-			URL: actionURL,
-			Context: map[string]any{
-				"action":     "ignore",
-				"error_id":   params.Mapping.ErrorID,
-				"project_id": params.Mapping.ProjectID,
+	// Ignore/Unignore button - toggle based on current status
+	if params.CurrentStatus == "ignored" {
+		actions = append(actions, &model.PostAction{
+			Id:    "unignore",
+			Name:  "↩ Unignore",
+			Style: "default",
+			Type:  model.PostActionTypeButton,
+			Integration: &model.PostActionIntegration{
+				URL: actionURL,
+				Context: map[string]any{
+					"action":     "unignore",
+					"error_id":   params.Mapping.ErrorID,
+					"project_id": params.Mapping.ProjectID,
+					"error_url":  params.ErrorURL,
+				},
 			},
-		},
-	})
+		})
+	} else {
+		actions = append(actions, &model.PostAction{
+			Id:    "ignore",
+			Name:  "✕ Ignore",
+			Style: "default",
+			Type:  model.PostActionTypeButton,
+			Integration: &model.PostActionIntegration{
+				URL: actionURL,
+				Context: map[string]any{
+					"action":     "ignore",
+					"error_id":   params.Mapping.ErrorID,
+					"project_id": params.Mapping.ProjectID,
+					"error_url":  params.ErrorURL,
+				},
+			},
+		})
+	}
 
 	if strings.TrimSpace(params.ErrorURL) != "" {
 		actions = append(actions, &model.PostAction{

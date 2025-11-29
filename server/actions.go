@@ -163,6 +163,24 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 			msgParts = append(msgParts, "Bugsnag client unavailable, ignore skipped")
 			replyMessage = fmt.Sprintf("@%s tried to ignore this error but Bugsnag API is not configured.", user.Username)
 		}
+	case "unignore":
+		if bugsnagClient != nil {
+			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, projectID, errorID, "open"); err != nil {
+				p.API.LogError("Bugsnag unignore failed", "err", err.Error(), "project_id", projectID, "error_id", errorID)
+				msgParts = append(msgParts, fmt.Sprintf("Bugsnag unignore failed: %v", err))
+				replyMessage = fmt.Sprintf("@%s tried to unignore this error but failed: %v", user.Username, err)
+			} else {
+				p.API.LogInfo("Bugsnag status updated to open", "project_id", projectID, "error_id", errorID)
+				msgParts = append(msgParts, "status set to open in Bugsnag")
+				newStatus = "open"
+				actionSuccess = true
+				replyMessage = fmt.Sprintf("@%s reopened this error (unignored).", user.Username)
+			}
+		} else {
+			p.API.LogWarn("Bugsnag client unavailable, unignore skipped")
+			msgParts = append(msgParts, "Bugsnag client unavailable, unignore skipped")
+			replyMessage = fmt.Sprintf("@%s tried to unignore this error but Bugsnag API is not configured.", user.Username)
+		}
 	case "open_in_browser":
 		// Return response that tells the client to open the URL
 		if errorURL != "" {
