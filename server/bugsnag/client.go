@@ -173,19 +173,19 @@ func (c *Client) UpdateProjectErrorStatus(ctx context.Context, projectID, errorI
 	return c.do(ctx, http.MethodPatch, endpoint, payload, nil)
 }
 
-// AssignError assigns a Bugsnag error to a user. The assignee can be either
-// a user ID or email depending on the installation settings.
-func (c *Client) AssignError(ctx context.Context, projectID, errorID, assignee string) error {
-	if assignee == "" {
-		return fmt.Errorf("assignee is required")
+// AssignError assigns a Bugsnag error to a collaborator.
+// The assignee should be a collaborator ID from the organization.
+func (c *Client) AssignError(ctx context.Context, projectID, errorID, collaboratorID string) error {
+	if collaboratorID == "" {
+		return fmt.Errorf("collaborator ID is required")
 	}
 
 	payload := map[string]string{
-		"assignee_id": assignee,
+		"assigned_collaborator_id": collaboratorID,
 	}
 
-	endpoint := fmt.Sprintf("/projects/%s/errors/%s/assignee", url.PathEscape(projectID), url.PathEscape(errorID))
-	return c.do(ctx, http.MethodPut, endpoint, payload, nil)
+	endpoint := fmt.Sprintf("/projects/%s/errors/%s", url.PathEscape(projectID), url.PathEscape(errorID))
+	return c.do(ctx, http.MethodPatch, endpoint, payload, nil)
 }
 
 func (c *Client) do(ctx context.Context, method, endpoint string, body any, out any) error {

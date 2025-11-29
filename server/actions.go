@@ -100,19 +100,24 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 			BugsnagEmail:  bugsnagUser.BugsnagEmail,
 		})
 		if assignee == "" {
+			p.API.LogWarn("no Bugsnag mapping available for assignment", "user_id", payload.UserId, "username", user.Username)
 			msgParts = append(msgParts, "no Bugsnag mapping available for assignment")
 			break
 		}
 
 		if bugsnagClient != nil {
+			p.API.LogInfo("calling Bugsnag API to assign error", "project_id", projectID, "error_id", errorID, "assignee", assignee)
 			if err := bugsnagClient.AssignError(ctx, projectID, errorID, assignee); err != nil {
+				p.API.LogError("Bugsnag assign failed", "err", err.Error(), "project_id", projectID, "error_id", errorID, "assignee", assignee)
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag assign failed: %v", err))
 			} else {
+				p.API.LogInfo("Bugsnag error assigned", "project_id", projectID, "error_id", errorID, "assignee", assignee)
 				msgParts = append(msgParts, fmt.Sprintf("assigned to %s in Bugsnag", assignee))
 				assignedUsername = user.Username
 				actionSuccess = true
 			}
 		} else {
+			p.API.LogWarn("Bugsnag client unavailable, assignment skipped")
 			msgParts = append(msgParts, "Bugsnag client unavailable, assignment skipped")
 		}
 	case "resolve":
