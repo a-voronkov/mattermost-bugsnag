@@ -133,3 +133,30 @@ func mapUserToBugsnag(mappings []UserMapping, user *model.User) (UserMapping, bo
 
 	return UserMapping{}, false
 }
+
+// mapBugsnagToMattermost finds the Mattermost user ID for a given Bugsnag
+// collaborator (by ID or email). Returns empty string if no mapping exists.
+func mapBugsnagToMattermost(mappings []UserMapping, bugsnagUserID, bugsnagEmail string) string {
+	bugsnagUserID = strings.TrimSpace(bugsnagUserID)
+	bugsnagEmail = strings.TrimSpace(strings.ToLower(bugsnagEmail))
+
+	// First try by Bugsnag user ID
+	if bugsnagUserID != "" {
+		for _, m := range mappings {
+			if strings.TrimSpace(m.BugsnagUserID) == bugsnagUserID {
+				return strings.TrimSpace(m.MMUserID)
+			}
+		}
+	}
+
+	// Fall back to email matching
+	if bugsnagEmail != "" {
+		for _, m := range mappings {
+			if strings.TrimSpace(strings.ToLower(m.BugsnagEmail)) == bugsnagEmail {
+				return strings.TrimSpace(m.MMUserID)
+			}
+		}
+	}
+
+	return ""
+}

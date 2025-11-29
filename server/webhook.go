@@ -41,23 +41,30 @@ type accountInfo struct {
 }
 
 type errorInfo struct {
-	ID             string          `json:"id"`
-	ErrorID        string          `json:"errorId"`
-	ExceptionClass string          `json:"exceptionClass"`
-	Message        string          `json:"message"`
-	Context        string          `json:"context"`
-	FirstReceived  string          `json:"firstReceived"`
-	ReceivedAt     string          `json:"receivedAt"`
-	RequestURL     string          `json:"requestUrl,omitempty"`
-	URL            string          `json:"url"`
-	Severity       string          `json:"severity"`
-	Status         string          `json:"status"`
-	Unhandled      bool            `json:"unhandled"`
-	App            *appInfo        `json:"app,omitempty"`
-	Device         *deviceInfo     `json:"device,omitempty"`
-	User           *userInfo       `json:"user,omitempty"`
-	Exceptions     []exceptionInfo `json:"exceptions,omitempty"`
-	StackTrace     []stackFrame    `json:"stackTrace,omitempty"` // deprecated but still sent
+	ID                   string          `json:"id"`
+	ErrorID              string          `json:"errorId"`
+	ExceptionClass       string          `json:"exceptionClass"`
+	Message              string          `json:"message"`
+	Context              string          `json:"context"`
+	FirstReceived        string          `json:"firstReceived"`
+	ReceivedAt           string          `json:"receivedAt"`
+	RequestURL           string          `json:"requestUrl,omitempty"`
+	URL                  string          `json:"url"`
+	Severity             string          `json:"severity"`
+	Status               string          `json:"status"`
+	Unhandled            bool            `json:"unhandled"`
+	AssignedCollaborator *collaborator   `json:"assigned_collaborator,omitempty"`
+	App                  *appInfo        `json:"app,omitempty"`
+	Device               *deviceInfo     `json:"device,omitempty"`
+	User                 *userInfo       `json:"user,omitempty"`
+	Exceptions           []exceptionInfo `json:"exceptions,omitempty"`
+	StackTrace           []stackFrame    `json:"stackTrace,omitempty"` // deprecated but still sent
+}
+
+type collaborator struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 type appInfo struct {
@@ -180,6 +187,13 @@ func (p webhookPayload) isUnhandled() bool {
 		return p.Error.Unhandled
 	}
 	return false
+}
+
+func (p webhookPayload) getAssignedCollaborator() *collaborator {
+	if p.Error != nil {
+		return p.Error.AssignedCollaborator
+	}
+	return nil
 }
 
 func (p webhookPayload) getAppVersion() string {
@@ -324,7 +338,7 @@ func buildCardTitle(payload webhookPayload) string {
 	return ":rotating_light: Bugsnag error"
 }
 
-func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.SlackAttachment {
+func buildCardAttachment(payload webhookPayload, cfg Configuration, userMappings []UserMapping, mm *MMClient) *model.SlackAttachment {
 	errorID := payload.getErrorID()
 	projectID := payload.getProjectID()
 	projectName := payload.getProjectName()
@@ -362,10 +376,18 @@ func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.Slack
 		})
 	}
 
-	if payload.isUnhandled() {
+	// Show assigned user instead of "Handled" field
+	if assignee := payload.getAssignedCollaborator(); assignee != nil {
+		assignedValue := assignee.Email // Default to email
+		// Try to find Mattermost user
+		if mmUserID := mapBugsnagToMattermost(userMappings, assignee.ID, assignee.Email); mmUserID != "" {
+			if mmUser, appErr := mm.GetUser(mmUserID); appErr == nil {
+				assignedValue = "@" + mmUser.Username
+			}
+		}
 		attachmentFields = append(attachmentFields, &model.SlackAttachmentField{
-			Title: "Handled",
-			Value: "❌ Unhandled",
+			Title: "Assigned",
+			Value: assignedValue,
 			Short: true,
 		})
 	}
@@ -561,7 +583,10 @@ func (p *Plugin) upsertErrorCard(mm *MMClient, channelID string, payload webhook
 		return fmt.Errorf("load existing mapping: %w", appErr)
 	}
 
-	attachments := []*model.SlackAttachment{buildCardAttachment(payload, cfg)}
+	// Load user mappings for Assigned field
+	userMappings, _ := loadUserMappings(mm)
+
+	attachments := []*model.SlackAttachment{buildCardAttachment(payload, cfg, userMappings, mm)}
 	title := buildCardTitle(payload)
 
 	if found {

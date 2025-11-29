@@ -295,24 +295,40 @@ func BuildActions(params BuildActionsParams) []*model.PostAction {
 		})
 	}
 
-	// Resolve button - disable if status is already "fixed"
-	resolveDisabled := params.CurrentStatus == "fixed"
-	actions = append(actions, &model.PostAction{
-		Id:       "resolve",
-		Name:     "✓ Resolve",
-		Style:    "primary",
-		Type:     model.PostActionTypeButton,
-		Disabled: resolveDisabled,
-		Integration: &model.PostActionIntegration{
-			URL: actionURL,
-			Context: map[string]any{
-				"action":     "resolve",
-				"error_id":   params.Mapping.ErrorID,
-				"project_id": params.Mapping.ProjectID,
-				"error_url":  params.ErrorURL,
+	// Resolve/Unresolve button - toggle based on current status
+	if params.CurrentStatus == "fixed" {
+		actions = append(actions, &model.PostAction{
+			Id:    "unresolve",
+			Name:  "↩ Unresolve",
+			Style: "default",
+			Type:  model.PostActionTypeButton,
+			Integration: &model.PostActionIntegration{
+				URL: actionURL,
+				Context: map[string]any{
+					"action":     "unresolve",
+					"error_id":   params.Mapping.ErrorID,
+					"project_id": params.Mapping.ProjectID,
+					"error_url":  params.ErrorURL,
+				},
 			},
-		},
-	})
+		})
+	} else {
+		actions = append(actions, &model.PostAction{
+			Id:    "resolve",
+			Name:  "✓ Resolve",
+			Style: "primary",
+			Type:  model.PostActionTypeButton,
+			Integration: &model.PostActionIntegration{
+				URL: actionURL,
+				Context: map[string]any{
+					"action":     "resolve",
+					"error_id":   params.Mapping.ErrorID,
+					"project_id": params.Mapping.ProjectID,
+					"error_url":  params.ErrorURL,
+				},
+			},
+		})
+	}
 
 	// Ignore/Unignore button - toggle based on current status
 	if params.CurrentStatus == "ignored" {

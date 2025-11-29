@@ -36,7 +36,7 @@ func (c *MMClient) CreatePost(channelID, message string, attachments []*model.Sl
 }
 
 func (c *MMClient) CreateReply(channelID, rootPostID, message string) (*model.Post, *model.AppError) {
-	post := &model.Post{ChannelId: channelID, Message: message, RootId: rootPostID}
+	post := &model.Post{ChannelId: channelID, Message: message, RootId: rootPostID, UserId: c.botUserID}
 	return c.api.CreatePost(post)
 }
 

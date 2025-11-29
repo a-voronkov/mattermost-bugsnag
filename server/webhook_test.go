@@ -108,6 +108,7 @@ func TestHandleWebhookWithChannelID(t *testing.T) {
 	api := &plugintest.API{}
 	api.On("LogInfo", "received webhook", "remote", mock.Anything).Return()
 	api.On("KVGet", pluginID+":"+KVKeyProjectChannelMappings).Return(nil, nil)
+	api.On("KVGet", pluginID+":"+KVKeyUserMappings).Return(nil, nil)
 	api.On("GetChannel", channelID).Return(&model.Channel{Id: channelID}, nil)
 	api.On("KVGet", pluginID+":"+KVKeyErrorPostPrefix+"proj-1:err-123").Return(nil, nil)
 	api.On("CreatePost", mock.AnythingOfType("*model.Post")).Return(&model.Post{Id: postID, ChannelId: channelID}, nil)

@@ -144,6 +144,25 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 			msgParts = append(msgParts, "Bugsnag client unavailable, resolve skipped")
 			replyMessage = fmt.Sprintf("@%s tried to resolve this error but Bugsnag API is not configured.", user.Username)
 		}
+	case "unresolve":
+		if bugsnagClient != nil {
+			p.API.LogInfo("calling Bugsnag API with operation=open (unresolve)", "project_id", projectID, "error_id", errorID)
+			if err := bugsnagClient.UpdateProjectErrorStatus(ctx, projectID, errorID, "open"); err != nil {
+				p.API.LogError("Bugsnag unresolve failed", "err", err.Error(), "project_id", projectID, "error_id", errorID)
+				msgParts = append(msgParts, fmt.Sprintf("Bugsnag unresolve failed: %v", err))
+				replyMessage = fmt.Sprintf("@%s tried to unresolve this error but failed: %v", user.Username, err)
+			} else {
+				p.API.LogInfo("Bugsnag status updated to open (unresolve)", "project_id", projectID, "error_id", errorID)
+				msgParts = append(msgParts, "status set to open in Bugsnag")
+				newStatus = "open"
+				actionSuccess = true
+				replyMessage = fmt.Sprintf("@%s reopened this error (unresolved).", user.Username)
+			}
+		} else {
+			p.API.LogWarn("Bugsnag client unavailable, unresolve skipped")
+			msgParts = append(msgParts, "Bugsnag client unavailable, unresolve skipped")
+			replyMessage = fmt.Sprintf("@%s tried to unresolve this error but Bugsnag API is not configured.", user.Username)
+		}
 	case "ignore":
 		if bugsnagClient != nil {
 			p.API.LogInfo("calling Bugsnag API with operation=ignore", "project_id", projectID, "error_id", errorID)
