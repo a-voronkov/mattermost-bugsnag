@@ -127,18 +127,27 @@ func (r *Runner) tick() {
 			continue
 		}
 
-		post.Message = strings.TrimSpace(post.Message)
-		post.Message = fmt.Sprintf("%s\n\nStatus: %s | Events (total/24h): %d/%d | Last seen: %s | Synced: %s", post.Message, snapshot.Status, snapshot.Events, snapshot.Events24h, snapshot.LastSeen.Format(time.RFC3339), snapshot.LastSynced.Format(time.RFC3339))
+		// Extract current status from attachment
+		oldStatus := r.extractStatusFromPost(post)
+
+		// Only update if status changed
+		if oldStatus == snapshot.Status {
+			r.logDebug("sync: status unchanged", "error_id", active.ErrorID, "status", oldStatus)
+			continue
+		}
+
+		// Update Status field in attachment
+		r.updateAttachmentStatus(post, snapshot.Status)
 
 		if _, appErr = r.api.UpdatePost(post); appErr != nil {
 			r.logDebug("sync: failed to update post", "post_id", post.Id, "err", appErr.Error())
 			continue
 		}
 
-		threadMessage := fmt.Sprintf("[sync] Status: %s, events (total/24h): %d/%d, last seen: %s", snapshot.Status, snapshot.Events, snapshot.Events24h, snapshot.LastSeen.Format(time.RFC3339))
+		// Write thread message about status change
+		threadMessage := fmt.Sprintf("🔄 Status changed: **%s** → **%s** (synced from Bugsnag)", oldStatus, snapshot.Status)
 		if _, appErr = r.api.CreatePost(&model.Post{ChannelId: active.ChannelID, RootId: active.PostID, Message: threadMessage}); appErr != nil {
 			r.logDebug("sync: failed to create thread note", "post_id", active.PostID, "err", appErr.Error())
-			continue
 		}
 	}
 }
@@ -207,5 +216,85 @@ func (r *Runner) namespaced(key string) string {
 func (r *Runner) logDebug(msg string, keyValuePairs ...interface{}) {
 	if r.debug {
 		r.api.LogDebug(msg, keyValuePairs...)
+	}
+}
+
+// extractStatusFromPost reads the Status field from the post's attachment.
+func (r *Runner) extractStatusFromPost(post *model.Post) string {
+	if post.Props == nil {
+		return ""
+	}
+
+	attachments, ok := post.Props["attachments"]
+	if !ok {
+		return ""
+	}
+
+	// Handle []interface{} from DB
+	attList, ok := attachments.([]interface{})
+	if !ok || len(attList) == 0 {
+		return ""
+	}
+
+	attMap, ok := attList[0].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+
+	fields, ok := attMap["fields"].([]interface{})
+	if !ok {
+		return ""
+	}
+
+	for _, f := range fields {
+		fieldMap, ok := f.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if fieldMap["title"] == "Status" {
+			if val, ok := fieldMap["value"].(string); ok {
+				return val
+			}
+		}
+	}
+
+	return ""
+}
+
+// updateAttachmentStatus updates the Status field in the post's attachment.
+func (r *Runner) updateAttachmentStatus(post *model.Post, newStatus string) {
+	if post.Props == nil {
+		return
+	}
+
+	attachments, ok := post.Props["attachments"]
+	if !ok {
+		return
+	}
+
+	attList, ok := attachments.([]interface{})
+	if !ok || len(attList) == 0 {
+		return
+	}
+
+	attMap, ok := attList[0].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	fields, ok := attMap["fields"].([]interface{})
+	if !ok {
+		return
+	}
+
+	for _, f := range fields {
+		fieldMap, ok := f.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if fieldMap["title"] == "Status" {
+			fieldMap["value"] = newStatus
+			break
+		}
 	}
 }
