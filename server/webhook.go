@@ -392,13 +392,7 @@ func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.Slack
 		})
 	}
 
-	if payload.Trigger.Type != "" {
-		attachmentFields = append(attachmentFields, &model.SlackAttachmentField{
-			Title: "Trigger",
-			Value: payload.Trigger.Type,
-			Short: true,
-		})
-	}
+	// Trigger info is shown in update comments, not in the card fields
 
 	footer := "Bugsnag"
 	if cfg.OrganizationID != "" {
@@ -409,7 +403,7 @@ func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.Slack
 	actions := []*model.PostAction{
 		{
 			Id:    "assign_me",
-			Name:  "🙋 Assign to me",
+			Name:  "Assign to me",
 			Style: "primary",
 			Type:  model.PostActionTypeButton,
 			Integration: &model.PostActionIntegration{
@@ -424,7 +418,7 @@ func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.Slack
 		},
 		{
 			Id:    "resolve",
-			Name:  "✅ Resolve",
+			Name:  "Resolve",
 			Style: "primary",
 			Type:  model.PostActionTypeButton,
 			Integration: &model.PostActionIntegration{
@@ -438,7 +432,7 @@ func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.Slack
 		},
 		{
 			Id:    "ignore",
-			Name:  "🙈 Ignore",
+			Name:  "Ignore",
 			Style: "default",
 			Type:  model.PostActionTypeButton,
 			Integration: &model.PostActionIntegration{
@@ -455,7 +449,7 @@ func buildCardAttachment(payload webhookPayload, cfg Configuration) *model.Slack
 	if errorURL != "" {
 		actions = append(actions, &model.PostAction{
 			Id:    "open",
-			Name:  "🔗 Open in Bugsnag",
+			Name:  "Open in Bugsnag",
 			Style: "link",
 			Type:  model.PostActionTypeButton,
 			Integration: &model.PostActionIntegration{

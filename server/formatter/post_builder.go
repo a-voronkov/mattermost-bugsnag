@@ -56,16 +56,27 @@ func BuildErrorPost(errorData ErrorData, mapping ErrorPostMapping, mmUserMapping
 	}
 }
 
-// UpdatePostStatus updates the status in an existing post's message and attachment.
+// UpdatePostParams contains parameters for updating a Bugsnag error post.
+type UpdatePostParams struct {
+	Post             *model.Post
+	NewStatus        string
+	Mapping          ErrorPostMapping
+	ErrorURL         string
+	AssignedUsername string // Mattermost username (without @)
+}
+
+// UpdatePost updates the status and/or assignment in an existing post's message and attachment.
 // Returns the updated post ready to be saved.
-func UpdatePostStatus(post *model.Post, newStatus string, mapping ErrorPostMapping, errorURL string) *model.Post {
+func UpdatePost(params UpdatePostParams) *model.Post {
+	post := params.Post
+
 	// Update the message line with new status
 	message := post.Message
 	if idx := strings.Index(message, " · Status:"); idx > 0 {
 		message = message[:idx]
 	}
-	if newStatus != "" {
-		message = fmt.Sprintf("%s · Status: %s", message, newStatus)
+	if params.NewStatus != "" {
+		message = fmt.Sprintf("%s · Status: %s", message, params.NewStatus)
 	}
 	post.Message = message
 
@@ -77,19 +88,36 @@ func UpdatePostStatus(post *model.Post, newStatus string, mapping ErrorPostMappi
 		for i, line := range lines {
 			if strings.HasPrefix(line, "Status:") {
 				parts := strings.Split(line, " | ")
-				parts[0] = fmt.Sprintf("Status: %s", newStatus)
+				parts[0] = fmt.Sprintf("Status: %s", params.NewStatus)
 				lines[i] = strings.Join(parts, " | ")
 				break
 			}
 		}
 		att.Text = strings.Join(lines, "\n")
 
-		// Rebuild actions to keep them functional
-		att.Actions = buildActions(mapping, errorURL)
+		// Rebuild actions with current status for proper button states
+		att.Actions = BuildActions(BuildActionsParams{
+			Mapping:        params.Mapping,
+			ErrorURL:       params.ErrorURL,
+			CurrentStatus:  params.NewStatus,
+			AssignedUserID: params.AssignedUsername,
+		})
 		post.Props["attachments"] = []*model.SlackAttachment{att}
 	}
 
 	return post
+}
+
+// UpdatePostStatus updates the status in an existing post's message and attachment.
+// Returns the updated post ready to be saved.
+// Deprecated: Use UpdatePost instead for more control over the update.
+func UpdatePostStatus(post *model.Post, newStatus string, mapping ErrorPostMapping, errorURL string) *model.Post {
+	return UpdatePost(UpdatePostParams{
+		Post:      post,
+		NewStatus: newStatus,
+		Mapping:   mapping,
+		ErrorURL:  errorURL,
+	})
 }
 
 func buildMessage(errorData ErrorData) string {
@@ -146,66 +174,102 @@ func buildAttachment(errorData ErrorData, mapping ErrorPostMapping, mmUserMappin
 	}
 }
 
+// BuildActionsParams contains the parameters for building action buttons.
+type BuildActionsParams struct {
+	Mapping        ErrorPostMapping
+	ErrorURL       string
+	CurrentStatus  string
+	AssignedUserID string
+}
+
 func buildActions(mapping ErrorPostMapping, errorURL string) []*model.PostAction {
+	return BuildActions(BuildActionsParams{
+		Mapping:  mapping,
+		ErrorURL: errorURL,
+	})
+}
+
+// BuildActions creates action buttons for a Bugsnag error post with optional
+// state-based modifications (disabled buttons, assigned user display).
+func BuildActions(params BuildActionsParams) []*model.PostAction {
 	actionURL := fmt.Sprintf("/plugins/%s/actions", kvkeys.PluginID)
 
-	actions := []*model.PostAction{
-		{
+	var actions []*model.PostAction
+
+	// Assign button - show "Assigned to @user" if already assigned
+	if params.AssignedUserID != "" {
+		actions = append(actions, &model.PostAction{
+			Id:       "assigned",
+			Name:     fmt.Sprintf("Assigned to @%s", params.AssignedUserID),
+			Style:    "default",
+			Type:     model.PostActionTypeButton,
+			Disabled: true,
+		})
+	} else {
+		actions = append(actions, &model.PostAction{
 			Id:    "assign_me",
-			Name:  "🙋 Assign to me",
+			Name:  "Assign to me",
 			Style: "primary",
 			Type:  model.PostActionTypeButton,
 			Integration: &model.PostActionIntegration{
 				URL: actionURL,
 				Context: map[string]any{
 					"action":     "assign_me",
-					"error_id":   mapping.ErrorID,
-					"project_id": mapping.ProjectID,
-					"error_url":  errorURL,
+					"error_id":   params.Mapping.ErrorID,
+					"project_id": params.Mapping.ProjectID,
+					"error_url":  params.ErrorURL,
 				},
 			},
-		},
-		{
-			Id:    "resolve",
-			Name:  "✅ Resolve",
-			Style: "primary",
-			Type:  model.PostActionTypeButton,
-			Integration: &model.PostActionIntegration{
-				URL: actionURL,
-				Context: map[string]any{
-					"action":     "resolve",
-					"error_id":   mapping.ErrorID,
-					"project_id": mapping.ProjectID,
-				},
-			},
-		},
-		{
-			Id:    "ignore",
-			Name:  "🙈 Ignore",
-			Style: "default",
-			Type:  model.PostActionTypeButton,
-			Integration: &model.PostActionIntegration{
-				URL: actionURL,
-				Context: map[string]any{
-					"action":     "ignore",
-					"error_id":   mapping.ErrorID,
-					"project_id": mapping.ProjectID,
-				},
-			},
-		},
+		})
 	}
 
-	if strings.TrimSpace(errorURL) != "" {
+	// Resolve button - disable if status is already "fixed"
+	resolveDisabled := params.CurrentStatus == "fixed"
+	actions = append(actions, &model.PostAction{
+		Id:       "resolve",
+		Name:     "Resolve",
+		Style:    "primary",
+		Type:     model.PostActionTypeButton,
+		Disabled: resolveDisabled,
+		Integration: &model.PostActionIntegration{
+			URL: actionURL,
+			Context: map[string]any{
+				"action":     "resolve",
+				"error_id":   params.Mapping.ErrorID,
+				"project_id": params.Mapping.ProjectID,
+			},
+		},
+	})
+
+	// Ignore button - disable if status is already "ignored"
+	ignoreDisabled := params.CurrentStatus == "ignored"
+	actions = append(actions, &model.PostAction{
+		Id:       "ignore",
+		Name:     "Ignore",
+		Style:    "default",
+		Type:     model.PostActionTypeButton,
+		Disabled: ignoreDisabled,
+		Integration: &model.PostActionIntegration{
+			URL: actionURL,
+			Context: map[string]any{
+				"action":     "ignore",
+				"error_id":   params.Mapping.ErrorID,
+				"project_id": params.Mapping.ProjectID,
+			},
+		},
+	})
+
+	if strings.TrimSpace(params.ErrorURL) != "" {
 		actions = append(actions, &model.PostAction{
 			Id:    "open",
-			Name:  "🔗 Open in Bugsnag",
+			Name:  "Open in Bugsnag",
 			Style: "link",
 			Type:  model.PostActionTypeButton,
 			Integration: &model.PostActionIntegration{
 				URL: actionURL,
 				Context: map[string]any{
 					"action":    "open_in_browser",
-					"error_url": errorURL,
+					"error_url": params.ErrorURL,
 				},
 			},
 		})

@@ -78,7 +78,7 @@ func TestBuildErrorPost(t *testing.T) {
 	}
 
 	firstAction := attachment.Actions[0]
-	if firstAction.Id != "assign_me" || firstAction.Name != "🙋 Assign to me" {
+	if firstAction.Id != "assign_me" || firstAction.Name != "Assign to me" {
 		t.Errorf("unexpected first action: %+v", firstAction)
 	}
 

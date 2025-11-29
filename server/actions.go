@@ -91,6 +91,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	var newStatus string
+	var assignedUsername string
 	var actionSuccess bool
 
 	switch action {
@@ -109,6 +110,7 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 				msgParts = append(msgParts, fmt.Sprintf("Bugsnag assign failed: %v", err))
 			} else {
 				msgParts = append(msgParts, fmt.Sprintf("assigned to %s in Bugsnag", assignee))
+				assignedUsername = user.Username
 				actionSuccess = true
 			}
 		} else {
@@ -139,23 +141,40 @@ func (p *Plugin) handleActions(w http.ResponseWriter, r *http.Request) {
 			msgParts = append(msgParts, "Bugsnag client unavailable, ignore skipped")
 		}
 	case "open_in_browser":
-		// No API call needed; response will include the source URL if present.
+		// Return response that tells the client to open the URL
+		if payload.Context.ErrorURL != "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"type":            "ok",
+				"open_in_browser": payload.Context.ErrorURL,
+			})
+			return
+		}
+		http.Error(w, "no URL available", http.StatusBadRequest)
+		return
 	default:
 		http.Error(w, "unsupported action", http.StatusBadRequest)
 		return
 	}
 
-	// Update the card if action was successful and we have a status change
-	if actionSuccess && newStatus != "" && found {
+	// Update the card if action was successful
+	if actionSuccess && found {
 		if post, appErr := mm.GetPost(postMapping.PostID); appErr == nil {
 			mapping := formatter.ErrorPostMapping{
 				ChannelID: postMapping.ChannelID,
 				ProjectID: payload.Context.ProjectID,
 				ErrorID:   payload.Context.ErrorID,
 			}
-			updatedPost := formatter.UpdatePostStatus(post, newStatus, mapping, payload.Context.ErrorURL)
+			updatedPost := formatter.UpdatePost(formatter.UpdatePostParams{
+				Post:             post,
+				NewStatus:        newStatus,
+				Mapping:          mapping,
+				ErrorURL:         payload.Context.ErrorURL,
+				AssignedUsername: assignedUsername,
+			})
 			if _, appErr := mm.UpdatePost(updatedPost); appErr != nil {
-				mm.LogDebug("failed to update card status", "err", appErr.Error())
+				mm.LogDebug("failed to update card", "err", appErr.Error())
 			}
 		}
 	}
