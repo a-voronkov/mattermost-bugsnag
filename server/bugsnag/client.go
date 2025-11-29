@@ -252,11 +252,9 @@ type UserMapping struct {
 	BugsnagEmail  string
 }
 
-// BestAssignee returns the most precise Bugsnag identity to use for assignment.
-// It prefers explicit Bugsnag user ID, falling back to email.
+// BestAssignee returns the Bugsnag collaborator ID for assignment.
+// Bugsnag API requires a collaborator ID, not an email.
+// Returns empty string if no ID is available.
 func BestAssignee(mapping UserMapping) string {
-	if id := strings.TrimSpace(mapping.BugsnagUserID); id != "" {
-		return id
-	}
-	return strings.TrimSpace(mapping.BugsnagEmail)
+	return strings.TrimSpace(mapping.BugsnagUserID)
 }
